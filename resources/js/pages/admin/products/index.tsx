@@ -32,6 +32,7 @@ import {
     SkinOutlined,
     SafetyCertificateOutlined,
     IdcardOutlined,
+    InboxOutlined,
 } from '@ant-design/icons';
 import type { Product, ProductType, UnitOfMeasure } from '@/types/pharmacy';
 
@@ -64,6 +65,37 @@ export default function ProductsIndex({
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+    // Quick Stock Adjustment Modal state
+    const [stockModalProduct, setStockModalProduct] = useState<Product | null>(null);
+    const [stockQty, setStockQty] = useState<number>(0);
+    const [stockNotes, setStockNotes] = useState<string>('');
+    const [isSubmittingStock, setIsSubmittingStock] = useState<boolean>(false);
+
+    const openStockModal = (product: Product) => {
+        setStockModalProduct(product);
+        setStockQty(product.total_stock ?? 0);
+        setStockNotes('');
+    };
+
+    const handleSaveStock = () => {
+        if (!stockModalProduct) return;
+        setIsSubmittingStock(true);
+        router.post(`/admin/products/${stockModalProduct.id}/stock-update`, {
+            new_quantity: stockQty,
+            notes: stockNotes || 'Stock count update in Product Masterlist',
+        }, {
+            onSuccess: () => {
+                message.success(`Stock for '${stockModalProduct.brand_name}' updated to ${stockQty}.`);
+                setStockModalProduct(null);
+                setIsSubmittingStock(false);
+            },
+            onError: (err) => {
+                message.error(Object.values(err)[0] as string || 'Failed to update stock');
+                setIsSubmittingStock(false);
+            },
+        });
+    };
 
     // Default base UOM
     const defaultBaseUom = unitsOfMeasure.find((u) => u.short_code === 'pc') || unitsOfMeasure[0];
@@ -480,6 +512,41 @@ export default function ProductsIndex({
             ),
         },
         {
+            title: 'Current Stock',
+            key: 'stock',
+            render: (_: any, record: Product) => {
+                const stock = record.total_stock ?? 0;
+                const baseUnitName = record.base_unit?.unit_of_measure?.short_code || 'pcs';
+                const isOutOfStock = stock <= 0;
+                const isLowStock = stock <= record.reorder_level;
+
+                return (
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                            <span className={`font-mono font-bold text-xs ${
+                                isOutOfStock ? 'text-red-600' : isLowStock ? 'text-amber-600' : 'text-emerald-700'
+                            }`}>
+                                {stock.toLocaleString()} {baseUnitName}
+                            </span>
+                            {isOutOfStock ? (
+                                <Tag color="error" className="text-[10px] m-0 px-1 py-0">Out of Stock</Tag>
+                            ) : isLowStock ? (
+                                <Tag color="warning" className="text-[10px] m-0 px-1 py-0">Low Stock</Tag>
+                            ) : null}
+                        </div>
+                        <Button
+                            size="small"
+                            type="dashed"
+                            onClick={() => openStockModal(record)}
+                            className="text-[11px] h-6 px-2 text-slate-600 hover:text-emerald-700 hover:border-emerald-500 w-fit"
+                        >
+                            Update Qty
+                        </Button>
+                    </div>
+                );
+            },
+        },
+        {
             title: 'Status',
             dataIndex: 'is_active',
             key: 'is_active',
@@ -532,12 +599,12 @@ export default function ProductsIndex({
         <AdminLayout
             breadcrumbs={[
                 {
-                    title: 'Product Catalog',
+                    title: 'Product Masterlist',
                     href: '/admin/products',
                 },
             ]}
         >
-            <Head title="Medicine & Grocery Masterfile - SAM PHARMA" />
+            <Head title="Product Masterlist - SAM PHARMA" />
 
             <div className="space-y-5">
                 {/* PAGE HEADER */}
@@ -545,14 +612,14 @@ export default function ProductsIndex({
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <Tag color="green" className="font-bold text-[10px] uppercase m-0">
-                                Unified Catalog
+                                Unified Masterlist
                             </Tag>
                             <span className="text-xs text-slate-400 font-semibold">
                                 Medicines, Groceries & Supplies
                             </span>
                         </div>
                         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 m-0">
-                            Pharmacy & Retail Masterfile
+                            Product Masterlist
                         </h1>
                         <p className="text-slate-500 text-xs sm:text-sm mt-0.5 m-0">
                             Manage pharmaceutical formulas with Generics Act compliance, alongside toiletries, baby care, and grocery convenience items.
@@ -1060,6 +1127,85 @@ export default function ProductsIndex({
                         </Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* QUICK STOCK ADJUSTMENT MODAL */}
+            <Modal
+                title={
+                    <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
+                        <InboxOutlined className="text-emerald-600 text-lg" />
+                        <span>Update Stock Quantity - {stockModalProduct?.brand_name}</span>
+                    </div>
+                }
+                open={Boolean(stockModalProduct)}
+                onCancel={() => setStockModalProduct(null)}
+                onOk={handleSaveStock}
+                confirmLoading={isSubmittingStock}
+                okText="Save Stock Count"
+                cancelText="Cancel"
+                okButtonProps={{ className: 'bg-emerald-600 hover:bg-emerald-700 font-bold' }}
+                destroyOnClose
+            >
+                {stockModalProduct && (
+                    <div className="space-y-4 py-2">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                            <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                                <span>Base Packaging Unit:</span>
+                                <span className="font-bold text-slate-700">
+                                    {stockModalProduct.base_unit?.unit_of_measure?.name || 'Piece'} ({stockModalProduct.base_unit?.unit_of_measure?.short_code || 'pc'})
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                                <span>Recorded Inventory Balance:</span>
+                                <span className="font-mono font-bold text-slate-900 text-sm">
+                                    {(stockModalProduct.total_stock ?? 0).toLocaleString()} {stockModalProduct.base_unit?.unit_of_measure?.short_code || 'pcs'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                New Total Stock Quantity ({stockModalProduct.base_unit?.unit_of_measure?.short_code || 'pcs'})
+                            </label>
+                            <InputNumber
+                                min={0}
+                                precision={0}
+                                value={stockQty}
+                                onChange={(val) => setStockQty(val ?? 0)}
+                                className="w-full text-lg font-bold"
+                                size="large"
+                                autoFocus
+                            />
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[11px] text-slate-400">Quick count presets:</span>
+                                {[10, 50, 100, 200, 500].map((preset) => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => setStockQty(preset)}
+                                        className="text-xs px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono font-semibold"
+                                    >
+                                        {preset}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Reason / Reference Notes
+                            </label>
+                            <Input
+                                placeholder="e.g. Physical inventory count, direct shelf delivery, lot adjustment"
+                                value={stockNotes}
+                                onChange={(e) => setStockNotes(e.target.value)}
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">
+                                Automatically logs a stock movement record in the inventory ledger with before and after balances.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </AdminLayout>
     );

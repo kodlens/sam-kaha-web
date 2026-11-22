@@ -139,7 +139,6 @@ export default function PosTerminal({
                 if (matchedUnit && matchedUnit.unit_of_measure) {
                     addToCart(prod, matchedUnit);
                     setSearchQuery('');
-                    message.success(`Added ${prod.brand_name} (${matchedUnit.unit_of_measure.name})`);
                     return;
                 }
                 // Check product barcode
@@ -148,7 +147,6 @@ export default function PosTerminal({
                     if (defaultUnit && defaultUnit.unit_of_measure) {
                         addToCart(prod, defaultUnit);
                         setSearchQuery('');
-                        message.success(`Added ${prod.brand_name}`);
                         return;
                     }
                 }
@@ -156,10 +154,32 @@ export default function PosTerminal({
         }
     };
 
-    // Add item to cart
+    // Add item to cart with strict inventory checks
     const addToCart = (product: Product, unit: ProductUnit) => {
         if (!unit.unit_of_measure) return;
         const uom = unit.unit_of_measure;
+        const availableBaseUnits = Number(product.total_stock_base ?? product.total_stock ?? 0);
+
+        // Block if out of stock
+        if (availableBaseUnits <= 0) {
+            message.error(`Cannot add "${product.brand_name}": Out of stock (0 available)!`);
+            return;
+        }
+
+        // Calculate current base units already in cart for this product
+        const currentCartBaseUnits = cart
+            .filter((item) => item.product_id === product.id)
+            .reduce((sum, item) => sum + item.quantity * item.conversion_factor, 0);
+
+        const neededBaseUnits = Number(unit.conversion_factor || 1);
+
+        if (currentCartBaseUnits + neededBaseUnits > availableBaseUnits) {
+            const remainingBaseUnits = Math.max(0, availableBaseUnits - currentCartBaseUnits);
+            message.warning(
+                `Insufficient stock for "${product.brand_name}" (${uom.name}). Only ${remainingBaseUnits} base units remaining.`
+            );
+            return;
+        }
 
         const cartId = `${product.id}-${unit.unit_of_measure_id}`;
 
@@ -199,12 +219,34 @@ export default function PosTerminal({
                 },
             ];
         });
+        message.success(`Added ${product.brand_name} (${uom.name})`);
     };
 
-    // Update cart item quantity
+    // Update cart item quantity with strict stock bounds check
     const updateQuantity = (cartId: string, delta: number) => {
-        setCart((prev) =>
-            prev
+        setCart((prev) => {
+            const targetItem = prev.find((item) => item.cart_id === cartId);
+            if (!targetItem) return prev;
+
+            if (delta > 0) {
+                const availableBaseUnits = Number(
+                    targetItem.product.total_stock_base ?? targetItem.product.total_stock ?? 0
+                );
+                const currentProductCartBaseUnits = prev
+                    .filter((item) => item.product_id === targetItem.product_id)
+                    .reduce((sum, item) => sum + item.quantity * item.conversion_factor, 0);
+
+                const additionalBaseUnits = Number(targetItem.conversion_factor || 1);
+
+                if (currentProductCartBaseUnits + additionalBaseUnits > availableBaseUnits) {
+                    message.warning(
+                        `Cannot add more "${targetItem.product.brand_name}": Maximum available stock is ${availableBaseUnits} base units.`
+                    );
+                    return prev;
+                }
+            }
+
+            return prev
                 .map((item) => {
                     if (item.cart_id === cartId) {
                         const newQty = item.quantity + delta;
@@ -217,8 +259,8 @@ export default function PosTerminal({
                     }
                     return item;
                 })
-                .filter(Boolean) as CartItem[]
-        );
+                .filter(Boolean) as CartItem[];
+        });
     };
 
     // Remove item from cart
@@ -328,6 +370,28 @@ export default function PosTerminal({
         setIsCheckoutModalOpen(true);
     };
 
+    // Keyboard Shortcut F9 to trigger Checkout or submit
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'F9') {
+                e.preventDefault();
+                if (isReceiptModalOpen) {
+                    setIsReceiptModalOpen(false);
+                    searchInputRef.current?.focus();
+                    return;
+                }
+                if (!isCheckoutModalOpen) {
+                    handleOpenCheckout();
+                } else if (!isSubmittingCheckout) {
+                    checkoutForm.submit();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [shift, cart, calculation.netTotal, isCheckoutModalOpen, isReceiptModalOpen, isSubmittingCheckout]);
+
     // Submit Checkout
     const handleCheckoutSubmit = async (values: any) => {
         setIsSubmittingCheckout(true);
@@ -425,25 +489,25 @@ export default function PosTerminal({
         <CashierLayout title="Pharma Express Terminal" shiftInfo={shift}>
             <Head title="Cashier POS Terminal - SAM PHARMA" />
 
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 h-full min-h-[calc(100vh-5.5rem)]">
+            <div className="flex-1 min-h-0 h-full grid grid-cols-1 lg:grid-cols-12 gap-2.5 overflow-hidden">
                 {/* ========================================================================= */}
                 {/* LEFT COLUMN: CATALOG SEARCH & DISPENSING SELECTION (7 COLS) */}
                 {/* ========================================================================= */}
-                <div className="lg:col-span-7 flex flex-col gap-3 h-full overflow-hidden">
+                <div className="lg:col-span-7 flex flex-col gap-2 h-full min-h-0 overflow-hidden">
                     {/* STANDBY BANNER IF SHIFT CLOSED */}
                     {(!shift || shift.status !== 'open') && (
-                        <div className="bg-amber-950/40 border border-amber-600/50 px-4 py-3 rounded-2xl flex items-center justify-between text-amber-300 text-xs shadow-sm">
+                        <div className="bg-amber-950/40 border border-amber-600/50 px-3 py-2 rounded-xl flex items-center justify-between text-amber-300 text-xs shadow-sm shrink-0">
                             <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping inline-block" />
+                                <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping inline-block" />
                                 <span className="font-semibold">
-                                    Register Drawer Standby: Please click "Open Shift & Starting Float" in the header to activate terminal.
+                                    Register Drawer Standby: Please click "Open Shift" in the header or below to activate terminal.
                                 </span>
                             </div>
                         </div>
                     )}
 
                     {/* SEARCH & BARCODE SCANNER BAR */}
-                    <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row items-center gap-3">
+                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-2xl flex flex-col sm:flex-row items-center gap-2 shrink-0">
                         <div className="relative flex-1 w-full">
                             <Input
                                 ref={searchInputRef}
@@ -451,14 +515,14 @@ export default function PosTerminal({
                                 prefix={<SearchOutlined className="text-emerald-400 mr-2" />}
                                 suffix={
                                     <Tag color="cyan" className="font-mono text-[10px] m-0">
-                                        Scan Barcode / Enter
+                                        Scan / Enter
                                     </Tag>
                                 }
                                 placeholder="Scan Barcode or Search Generic / Brand / Grocery..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleSearchKeyDown}
-                                className="bg-slate-950 border-slate-800 text-white placeholder-slate-500 rounded-xl py-2"
+                                className="bg-slate-950 border-slate-800 text-white placeholder-slate-500 rounded-xl py-1.5"
                                 autoFocus
                             />
                         </div>
@@ -475,7 +539,7 @@ export default function PosTerminal({
                                     key={tab.key}
                                     type="button"
                                     onClick={() => setSelectedCategory(tab.key as any)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                                         selectedCategory === tab.key
                                             ? 'bg-emerald-600 text-white shadow-sm'
                                             : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -488,7 +552,7 @@ export default function PosTerminal({
                     </div>
 
                     {/* PRODUCTS GRID / LIST */}
-                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
                         {filteredProducts.length === 0 ? (
                             <div className="h-64 flex flex-col items-center justify-center text-slate-500">
                                 <Empty description={<span className="text-slate-400 text-xs">No products found matching query</span>} />
@@ -591,12 +655,12 @@ export default function PosTerminal({
                 {/* ========================================================================= */}
                 {/* RIGHT COLUMN: ACTIVE CART & DISPENSING TOTALS (5 COLS) */}
                 {/* ========================================================================= */}
-                <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-col justify-between h-full shadow-lg overflow-hidden">
+                <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-col h-full min-h-0 shadow-lg overflow-hidden">
                     {/* CART HEADER */}
-                    <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
+                    <div className="pb-2.5 border-b border-slate-800 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <ShoppingCartOutlined className="text-emerald-400 text-base" />
-                            <h3 className="text-white font-bold text-base m-0">Current Order</h3>
+                            <h3 className="text-white font-bold text-sm sm:text-base m-0">Current Order</h3>
                             <Tag color="cyan" className="font-mono text-xs m-0">
                                 {cart.reduce((sum, item) => sum + item.quantity, 0)} items
                             </Tag>
@@ -636,10 +700,10 @@ export default function PosTerminal({
                     </div>
 
                     {/* CART ITEMS LIST */}
-                    <div className="flex-1 overflow-y-auto py-2 space-y-2 pr-1">
+                    <div className="flex-1 min-h-0 overflow-y-auto py-1.5 space-y-1.5 pr-1">
                         {cart.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-500 py-12">
-                                <ShoppingCartOutlined className="text-4xl text-slate-700 mb-2" />
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500 py-8">
+                                <ShoppingCartOutlined className="text-3xl text-slate-700 mb-2" />
                                 <p className="text-xs text-slate-400 m-0">Order is empty.</p>
                                 <p className="text-[11px] text-slate-600 m-0">Scan barcode or click packaging chips to add items.</p>
                             </div>
@@ -647,7 +711,7 @@ export default function PosTerminal({
                             cart.map((item) => (
                                 <div
                                     key={item.cart_id}
-                                    className="bg-slate-950 border border-slate-800/80 rounded-2xl p-2.5 flex items-center justify-between gap-2"
+                                    className="bg-slate-950 border border-slate-800/80 rounded-xl p-2 flex items-center justify-between gap-2"
                                 >
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1.5">
@@ -672,28 +736,28 @@ export default function PosTerminal({
                                     </div>
 
                                     {/* Quantity Stepper */}
-                                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
                                         <button
                                             type="button"
                                             onClick={() => updateQuantity(item.cart_id, -1)}
-                                            className="h-6 w-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
+                                            className="h-5 w-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
                                         >
                                             <MinusOutlined />
                                         </button>
-                                        <span className="font-mono font-bold text-white text-xs w-7 text-center">
+                                        <span className="font-mono font-bold text-white text-xs w-6 text-center">
                                             {item.quantity}
                                         </span>
                                         <button
                                             type="button"
                                             onClick={() => updateQuantity(item.cart_id, 1)}
-                                            className="h-6 w-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
+                                            className="h-5 w-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs"
                                         >
                                             <PlusOutlined />
                                         </button>
                                     </div>
 
                                     {/* Line Total */}
-                                    <div className="text-right shrink-0 min-w-[70px]">
+                                    <div className="text-right shrink-0 min-w-[65px]">
                                         <p className="font-mono font-bold text-white text-xs m-0">
                                             ₱{item.subtotal.toFixed(2)}
                                         </p>
@@ -711,9 +775,9 @@ export default function PosTerminal({
                     </div>
 
                     {/* DISCOUNT & TOTALS FOOTER */}
-                    <div className="pt-3 border-t border-slate-800 space-y-2">
+                    <div className="pt-2 border-t border-slate-800 space-y-1.5 shrink-0">
                         {/* Senior / PWD Discount Button or Applied Tag */}
-                        <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800">
+                        <div className="flex items-center justify-between bg-slate-950 p-1.5 rounded-xl border border-slate-800">
                             {currentDiscount ? (
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-1.5 text-xs text-purple-300">
@@ -741,7 +805,7 @@ export default function PosTerminal({
                                     icon={<IdcardOutlined />}
                                     disabled={cart.length === 0}
                                     onClick={() => setIsDiscountModalOpen(true)}
-                                    className="w-full bg-slate-900 border-slate-700 text-purple-300 hover:text-purple-200 font-semibold text-xs"
+                                    className="w-full bg-slate-900 border-slate-700 text-purple-300 hover:text-purple-200 font-semibold text-xs h-7"
                                 >
                                     Apply Senior Citizen / PWD 20% Discount (RA 9994/10754)
                                 </Button>
@@ -749,7 +813,7 @@ export default function PosTerminal({
                         </div>
 
                         {/* Breakdown Summary */}
-                        <div className="space-y-1 text-xs">
+                        <div className="space-y-0.5 text-xs">
                             <div className="flex justify-between text-slate-400">
                                 <span>Gross Subtotal:</span>
                                 <span className="font-mono text-slate-300">₱{calculation.grossSubtotal.toFixed(2)}</span>
@@ -770,9 +834,9 @@ export default function PosTerminal({
                             )}
 
                             {/* Grand Total */}
-                            <div className="flex justify-between items-baseline pt-2 border-t border-slate-800">
-                                <span className="text-sm font-bold text-white uppercase tracking-wider">Total Amount:</span>
-                                <span className="text-2xl font-mono font-bold text-emerald-400">
+                            <div className="flex justify-between items-baseline pt-1 border-t border-slate-800">
+                                <span className="text-xs font-bold text-white uppercase tracking-wider">Total Amount:</span>
+                                <span className="text-xl sm:text-2xl font-mono font-bold text-emerald-400">
                                     ₱{calculation.netTotal.toFixed(2)}
                                 </span>
                             </div>
@@ -797,7 +861,7 @@ export default function PosTerminal({
                                         }
                                     });
                                 }}
-                                className="w-full h-12 bg-amber-600 hover:bg-amber-500 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg"
+                                className="w-full h-11 bg-amber-600 hover:bg-amber-500 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg"
                             >
                                 <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
                                 <span>Click to Open Shift & Enable Checkout</span>
@@ -808,7 +872,7 @@ export default function PosTerminal({
                                 size="large"
                                 disabled={cart.length === 0}
                                 onClick={handleOpenCheckout}
-                                className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 font-bold text-base rounded-2xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
+                                className="w-full h-11 bg-emerald-600 hover:bg-emerald-500 font-bold text-sm sm:text-base rounded-xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
                             >
                                 <span>Pay & Dispense (F9)</span>
                                 <span className="font-mono">₱{calculation.netTotal.toFixed(2)}</span>
@@ -897,6 +961,7 @@ export default function PosTerminal({
                                     value={tenderedCash}
                                     onChange={(val) => setTenderedCash(Number(val) || 0)}
                                     className="w-full text-xl font-bold font-mono"
+                                    autoFocus
                                 />
                             </Form.Item>
 
@@ -944,7 +1009,7 @@ export default function PosTerminal({
                             loading={isSubmittingCheckout}
                             className="bg-emerald-600 hover:bg-emerald-500 font-bold px-6"
                         >
-                            Complete & Print Receipt
+                            Complete & Print Receipt (F9)
                         </Button>
                     </div>
                 </Form>

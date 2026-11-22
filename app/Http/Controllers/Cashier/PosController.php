@@ -172,12 +172,27 @@ class PosController extends Controller
 
             $requiresPrescription = false;
 
-            // Prepare items data for Philippine statutory calculation
+            // Prepare items data for Philippine statutory calculation & validate inventory
             $calculationItems = [];
             foreach ($validated['items'] as $itemData) {
                 $product = Product::findOrFail($itemData['product_id']);
                 if ($product->requires_prescription) {
                     $requiresPrescription = true;
+                }
+
+                $conversionFactor = (int) $itemData['conversion_factor'];
+                $qty = (int) $itemData['quantity'];
+                $neededBaseUnits = $qty * $conversionFactor;
+
+                // Validate that active non-expired stock covers requested quantity
+                $availableStock = (int) ProductBatch::where('product_id', $product->id)
+                    ->whereIn('status', ['active', 'near_expiry'])
+                    ->where('quantity_remaining', '>', 0)
+                    ->where('expiry_date', '>', now()->toDateString())
+                    ->sum('quantity_remaining');
+
+                if ($neededBaseUnits > $availableStock) {
+                    throw new Exception("Cannot dispense '{$product->brand_name}': Insufficient stock. Requested {$neededBaseUnits} base units, but only {$availableStock} are available.");
                 }
 
                 $calculationItems[] = [

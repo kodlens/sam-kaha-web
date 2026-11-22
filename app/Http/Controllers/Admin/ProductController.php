@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\ProductUnit;
+use App\Models\StockMovement;
 use App\Models\UnitOfMeasure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +29,8 @@ class ProductController extends Controller
         $vatStatus = $request->input('vat_status');
         $status = $request->input('status');
 
-        $query = Product::with(['units.unitOfMeasure', 'baseUnit.unitOfMeasure']);
+        $query = Product::with(['units.unitOfMeasure', 'baseUnit.unitOfMeasure'])
+            ->withSum('batches as total_stock', 'quantity_remaining');
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -274,5 +277,97 @@ class ProductController extends Controller
         $product->delete();
 
         return redirect()->back()->with('success', "Item '{$name}' deleted successfully.");
+    }
+
+    /**
+     * Quick adjust stock quantity directly from Product Masterlist.
+     */
+    public function quickUpdateStock(Request $request, Product $product): RedirectResponse
+    {
+        $validated = $request->validate([
+            'new_quantity' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $newStock = (int) $validated['new_quantity'];
+        $currentStock = (int) $product->batches()->sum('quantity_remaining');
+        $notes = ! empty($validated['notes']) ? $validated['notes'] : 'Stock count adjustment via Product Masterlist';
+
+        if ($newStock === $currentStock) {
+            return redirect()->back()->with('info', "Stock for {$product->brand_name} is already {$newStock}.");
+        }
+
+        DB::transaction(function () use ($product, $newStock, $currentStock, $notes) {
+            $baseUomId = $product->baseUnit?->unit_of_measure_id ?? 1;
+
+            if ($newStock > $currentStock) {
+                $difference = $newStock - $currentStock;
+                $batch = $product->batches()->where('quantity_remaining', '>', 0)->latest('expiry_date')->first();
+
+                if (! $batch) {
+                    $batch = ProductBatch::create([
+                        'product_id' => $product->id,
+                        'batch_number' => 'LOT-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
+                        'expiry_date' => now()->addYears(2)->toDateString(),
+                        'manufacturing_date' => now()->subMonths(1)->toDateString(),
+                        'received_date' => now()->toDateString(),
+                        'quantity_received' => $difference,
+                        'quantity_remaining' => $difference,
+                        'unit_cost' => $product->baseUnit?->cost ?? 0,
+                        'supplier_name' => 'Direct Inventory Adjustment',
+                        'status' => 'active',
+                        'notes' => $notes,
+                    ]);
+                } else {
+                    $batch->increment('quantity_remaining', $difference);
+                    $batch->increment('quantity_received', $difference);
+                }
+
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'product_batch_id' => $batch->id,
+                    'unit_of_measure_id' => $baseUomId,
+                    'movement_type' => 'adjustment_in',
+                    'quantity' => $difference,
+                    'quantity_in_base_units' => $difference,
+                    'balance_before' => $currentStock,
+                    'balance_after' => $newStock,
+                    'reference_type' => 'manual_adjustment',
+                    'reference_id' => 'ADJ-' . date('Ymd-His'),
+                    'user_id' => auth()->id(),
+                    'notes' => $notes,
+                ]);
+            } else {
+                $difference = $currentStock - $newStock;
+                $remainingToDeduct = $difference;
+                $batches = $product->batches()->where('quantity_remaining', '>', 0)->orderBy('expiry_date', 'asc')->get();
+
+                foreach ($batches as $b) {
+                    if ($remainingToDeduct <= 0) {
+                        break;
+                    }
+                    $deduct = min($b->quantity_remaining, $remainingToDeduct);
+                    $b->decrement('quantity_remaining', $deduct);
+                    $remainingToDeduct -= $deduct;
+                }
+
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'product_batch_id' => $batches->first()?->id,
+                    'unit_of_measure_id' => $baseUomId,
+                    'movement_type' => 'adjustment_out',
+                    'quantity' => $difference,
+                    'quantity_in_base_units' => -$difference,
+                    'balance_before' => $currentStock,
+                    'balance_after' => $newStock,
+                    'reference_type' => 'manual_adjustment',
+                    'reference_id' => 'ADJ-' . date('Ymd-His'),
+                    'user_id' => auth()->id(),
+                    'notes' => $notes,
+                ]);
+            }
+        });
+
+        return redirect()->back()->with('success', "Stock for '{$product->brand_name}' updated to {$newStock} units.");
     }
 }

@@ -44,6 +44,7 @@ export type Product = {
     description?: string | null;
     is_active: boolean;
     full_name?: string;
+    total_stock?: number;
     total_stock_base?: number;
     units?: ProductUnit[];
     base_unit?: ProductUnit;

@@ -173,7 +173,7 @@ export default function AdminDashboard({ metrics }: AdminDashboardProps) {
                                         <MedicineBoxOutlined className="text-xl" />
                                     </div>
                                     <h3 className="font-bold text-base text-slate-900 m-0">
-                                        Medicine Masterfile
+                                        Product Masterlist
                                     </h3>
                                     <p className="text-slate-500 text-xs mt-1">
                                         Generics Act indexing (Generic Name + Brand Name), Rx classifications, and dosage forms.

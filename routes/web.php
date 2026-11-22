@@ -36,9 +36,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/uom/{uom}/toggle', [UnitOfMeasureController::class, 'toggleStatus'])->name('uom.toggle');
         Route::delete('/uom/{uom}', [UnitOfMeasureController::class, 'destroy'])->name('uom.destroy');
 
-        // Module 3: Medicine & Product Masterfile
+        // Module 3: Product Masterlist
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+        Route::post('/products/{product}/stock-update', [ProductController::class, 'quickUpdateStock'])->name('products.stock-update');
         Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::patch('/products/{product}/toggle', [ProductController::class, 'toggleStatus'])->name('products.toggle');
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');

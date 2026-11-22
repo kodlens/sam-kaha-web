@@ -24,6 +24,8 @@ import {
     PoweroffOutlined,
     WalletOutlined,
     PlusCircleOutlined,
+    FullscreenOutlined,
+    FullscreenExitOutlined,
 } from '@ant-design/icons';
 import PharmaLogo from '@/components/pharma-logo';
 import ShiftReadingSlip from '@/components/shift-reading-slip';
@@ -47,6 +49,25 @@ export default function CashierLayout({
     const user = page.props.auth?.user;
 
     const [currentTime, setCurrentTime] = useState<string>('');
+    const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(Boolean(document.fullscreenElement));
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+    };
 
     // Modal states
     const [isOpenShiftModalOpen, setIsOpenShiftModalOpen] = useState(false);
@@ -264,17 +285,17 @@ export default function CashierLayout({
     ];
 
     return (
-        <Layout className="min-h-screen bg-slate-900 font-sans flex flex-col">
+        <Layout className="h-screen max-h-screen overflow-hidden bg-slate-900 font-sans flex flex-col">
             {/* CASHIER TOP BAR */}
-            <Header className="bg-slate-950 px-4 sm:px-6 h-16 border-b border-slate-800 flex items-center justify-between z-30 shrink-0">
+            <Header className="bg-slate-950 px-3 sm:px-5 h-14 border-b border-slate-800 flex items-center justify-between z-30 shrink-0">
                 {/* BRAND & POS TITLE */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <Link href="/cashier/pos" className="flex items-center">
                         <PharmaLogo variant="light" />
                     </Link>
 
                     <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-800">
-                        <Tag color="cyan" className="font-bold text-xs uppercase px-2 py-0.5">
+                        <Tag color="cyan" className="font-bold text-[10px] uppercase px-1.5 py-0">
                             Terminal Active
                         </Tag>
                         <span className="text-slate-400 text-xs font-semibold">
@@ -284,10 +305,27 @@ export default function CashierLayout({
                 </div>
 
                 {/* SHIFT & TIME STATUS */}
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    {/* Maximize Fullscreen Toggle Button */}
+                    <Tooltip title={isFullscreen ? 'Exit Fullscreen' : 'Maximize POS Screen'}>
+                        <Button
+                            size="small"
+                            type="text"
+                            icon={
+                                isFullscreen ? (
+                                    <FullscreenExitOutlined className="text-emerald-400 text-base" />
+                                ) : (
+                                    <FullscreenOutlined className="text-slate-300 text-base" />
+                                )
+                            }
+                            onClick={toggleFullscreen}
+                            className="text-white hover:bg-slate-800 h-8 w-8 flex items-center justify-center rounded-lg border border-slate-800"
+                        />
+                    </Tooltip>
+
                     {/* Live Clock */}
-                    <div className="hidden md:flex items-center gap-2 text-slate-300 text-xs font-mono bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
-                        <ClockCircleOutlined className="text-emerald-400" />
+                    <div className="hidden md:flex items-center gap-1.5 text-slate-300 text-xs font-mono bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                        <ClockCircleOutlined className="text-emerald-400 text-xs" />
                         <span>{currentTime}</span>
                     </div>
 
@@ -296,7 +334,7 @@ export default function CashierLayout({
                         <div className="flex items-center gap-2">
                             {/* Drawer Cash Pill */}
                             <Tooltip title="Current Cash in Register Drawer (Float + Cash Sales - Drops)">
-                                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 font-mono text-xs">
+                                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 font-mono text-xs">
                                     <WalletOutlined className="text-emerald-400" />
                                     <span>Drawer: ₱{Number(shiftInfo.current_drawer_cash || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                                 </div>
@@ -307,9 +345,9 @@ export default function CashierLayout({
                                 <Button
                                     size="small"
                                     type="primary"
-                                    className="bg-emerald-600 hover:bg-emerald-500 font-bold text-xs h-8 flex items-center gap-1 shadow-sm"
+                                    className="bg-emerald-600 hover:bg-emerald-500 font-bold text-xs h-7 flex items-center gap-1 shadow-sm px-2.5"
                                 >
-                                    <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                                     <span>Shift #{shiftInfo.id} Active</span>
                                 </Button>
                             </Dropdown>
@@ -319,19 +357,19 @@ export default function CashierLayout({
                             type="primary"
                             icon={<PlusCircleOutlined />}
                             onClick={() => setIsOpenShiftModalOpen(true)}
-                            className="bg-amber-600 hover:bg-amber-500 border-amber-500 text-white font-bold text-xs h-8 shadow-sm flex items-center gap-1"
+                            className="bg-amber-600 hover:bg-amber-500 border-amber-500 text-white font-bold text-xs h-7 shadow-sm flex items-center gap-1 px-2.5"
                         >
-                            Open Shift & Starting Float
+                            Open Shift
                         </Button>
                     )}
 
                     {/* Cashier Account Dropdown */}
                     <Dropdown menu={{ items: userDropdownItems }} trigger={['click']} placement="bottomRight">
-                        <div className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors select-none text-white">
-                            <Avatar className="bg-emerald-600 text-white font-bold text-xs h-7 w-7">
+                        <div className="flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors select-none text-white">
+                            <Avatar className="bg-emerald-600 text-white font-bold text-xs h-6 w-6">
                                 {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
                             </Avatar>
-                            <span className="hidden sm:block text-xs font-bold truncate max-w-[120px]">
+                            <span className="hidden sm:block text-xs font-bold truncate max-w-[100px]">
                                 {user?.name || 'Cashier'}
                             </span>
                         </div>
@@ -340,7 +378,7 @@ export default function CashierLayout({
             </Header>
 
             {/* MAIN CASHIER WORKSPACE */}
-            <Content className="flex-1 flex flex-col p-3 sm:p-4 bg-slate-950 overflow-hidden">
+            <Content className="flex-1 min-h-0 overflow-hidden flex flex-col p-2 sm:p-2.5 bg-slate-950">
                 {children}
             </Content>
 
