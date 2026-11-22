@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\OrganizerProfile;
-use App\Models\PlayerProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,11 +14,12 @@ class DashboardController extends Controller
     {
         return Inertia::render('admin/dashboard', [
             'metrics' => [
-                'totalUsers' => User::count(),
-                'totalOrganizers' => OrganizerProfile::count(),
-                'totalPlayers' => PlayerProfile::count(),
-                'activeTournaments' => 12,
+                'totalCashiers' => User::where('role', 'cashier')->count(),
+                'totalProducts' => 0,
+                'nearExpiryCount' => 0,
+                'todaySales' => 0.00,
             ],
+            'recentShifts' => [],
         ]);
     }
 }

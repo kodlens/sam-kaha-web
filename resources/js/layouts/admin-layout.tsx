@@ -13,9 +13,14 @@ import {
 import type { MenuProps } from 'antd';
 import {
     DashboardOutlined,
-    UsergroupAddOutlined,
-    ShopOutlined,
-    CreditCardOutlined,
+    AppstoreOutlined,
+    MedicineBoxOutlined,
+    HistoryOutlined,
+    PercentageOutlined,
+    ClockCircleOutlined,
+    TeamOutlined,
+    FileTextOutlined,
+    ShoppingCartOutlined,
     SettingOutlined,
     LogoutOutlined,
     HomeOutlined,
@@ -23,7 +28,7 @@ import {
     MenuUnfoldOutlined,
     CloseOutlined,
 } from '@ant-design/icons';
-import SamPickleLogo from '@/components/sampickle-logo';
+import PharmaLogo from '@/components/pharma-logo';
 import type { BreadcrumbItem, User } from '@/types';
 import { home } from '@/routes';
 
@@ -75,23 +80,49 @@ export default function AdminLayout({
     const sidebarMenuItems: MenuProps['items'] = [
         {
             key: '/admin/dashboard',
-            icon: <DashboardOutlined className="text-red-400" />,
-            label: <Link href="/admin/dashboard" onClick={() => setMobileOpen(false)}>System Overview</Link>,
+            icon: <DashboardOutlined className="text-emerald-400" />,
+            label: <Link href="/admin/dashboard" onClick={() => setMobileOpen(false)}>Dashboard Overview</Link>,
         },
         {
-            key: '/admin/users',
-            icon: <UsergroupAddOutlined className="text-amber-400" />,
-            label: <span onClick={() => setMobileOpen(false)}>User Management</span>,
+            key: '/cashier/pos',
+            icon: <ShoppingCartOutlined className="text-teal-400" />,
+            label: <Link href="/cashier/pos" onClick={() => setMobileOpen(false)}>Open POS Terminal</Link>,
+        },
+        { type: 'divider' },
+        {
+            key: '/admin/uom',
+            icon: <AppstoreOutlined className="text-sky-400" />,
+            label: <Link href="/admin/uom" onClick={() => setMobileOpen(false)}>Units of Measure (UOM)</Link>,
         },
         {
-            key: '/admin/organizations',
-            icon: <ShopOutlined className="text-emerald-400" />,
-            label: <span onClick={() => setMobileOpen(false)}>Organizers & Clubs</span>,
+            key: '/admin/products',
+            icon: <MedicineBoxOutlined className="text-emerald-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Medicine Masterfile</span>,
         },
         {
-            key: '/admin/subscriptions',
-            icon: <CreditCardOutlined className="text-sky-400" />,
-            label: <span onClick={() => setMobileOpen(false)}>Subscriptions & Payouts</span>,
+            key: '/admin/batches',
+            icon: <HistoryOutlined className="text-amber-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Batches & Expiry (FEFO)</span>,
+        },
+        {
+            key: '/admin/discounts',
+            icon: <PercentageOutlined className="text-purple-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Senior / PWD Discounts</span>,
+        },
+        {
+            key: '/admin/shifts',
+            icon: <ClockCircleOutlined className="text-cyan-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Cashier Shifts (X/Z)</span>,
+        },
+        {
+            key: '/admin/staff',
+            icon: <TeamOutlined className="text-blue-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Staff & Cashiers</span>,
+        },
+        {
+            key: '/admin/reports',
+            icon: <FileTextOutlined className="text-rose-400" />,
+            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>BIR & FDA Reports</span>,
         },
         { type: 'divider' },
         {
@@ -109,8 +140,8 @@ export default function AdminLayout({
                     <p className="font-bold text-slate-800 text-sm m-0 leading-tight">{user?.name}</p>
                     <p className="text-xs text-slate-500 m-0 mt-0.5">{user?.email}</p>
                     <div className="mt-1.5">
-                        <Tag color="red" className="text-[10px] font-bold m-0">
-                            Root Administrator
+                        <Tag color="geekblue" className="text-[10px] font-bold m-0 uppercase">
+                            Pharmacy Admin
                         </Tag>
                     </div>
                 </div>
@@ -121,50 +152,51 @@ export default function AdminLayout({
         {
             key: 'settings',
             icon: <SettingOutlined />,
-            label: <Link href="/settings/profile">Account Settings</Link>,
+            label: <Link href="/settings/profile">System Settings</Link>,
+        },
+        {
+            key: 'pos-link',
+            icon: <ShoppingCartOutlined />,
+            label: <Link href="/cashier/pos">Launch POS</Link>,
         },
         { type: 'divider' },
         {
             key: 'logout',
             icon: <LogoutOutlined className="text-red-500" />,
-            label: (
-                <span onClick={handleLogout} className="text-red-600 font-semibold">
-                    Sign Out
-                </span>
-            ),
+            label: <span className="text-red-600 font-semibold">Sign Out</span>,
+            onClick: handleLogout,
         },
     ];
 
-    const renderSidebarInner = (isDrawer = false) => (
-        <div className="flex flex-col h-full bg-[#18181b] text-white">
-            <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-800 shrink-0">
-                <Link href={home().url} className="flex items-center overflow-hidden" onClick={() => setMobileOpen(false)}>
-                    <SamPickleLogo variant="light" size="sm" showBadge={false} />
+    const renderSidebarInner = (isDrawer: boolean = false) => (
+        <div className="flex flex-col h-full bg-[#18181b]">
+            {/* BRAND HEADER */}
+            <div className="h-16 px-4 flex items-center justify-between border-b border-zinc-800 shrink-0">
+                <Link
+                    href="/admin/dashboard"
+                    onClick={() => isDrawer && setMobileOpen(false)}
+                    className="flex items-center gap-2 overflow-hidden"
+                >
+                    <PharmaLogo variant="light" collapsed={!isDrawer && collapsed} />
                 </Link>
-                {(!collapsed || isDrawer) ? (
-                    <div className="flex items-center gap-2">
-                        <Tag color="red" className="m-0 text-[10px] font-extrabold uppercase border-none bg-red-600/30 text-red-300">
-                            Admin
-                        </Tag>
-                        {isDrawer && (
-                            <Button
-                                type="text"
-                                icon={<CloseOutlined className="text-zinc-400 hover:text-white" />}
-                                onClick={() => setMobileOpen(false)}
-                                className="flex items-center justify-center p-1 h-8 w-8"
-                            />
-                        )}
-                    </div>
+
+                {isDrawer ? (
+                    <Button
+                        type="text"
+                        icon={<CloseOutlined className="text-zinc-400 hover:text-white" />}
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center justify-center p-1 h-8 w-8"
+                    />
                 ) : null}
             </div>
 
             {(!collapsed || isDrawer) ? (
-                <div className="px-4 py-2 mx-3 my-3 bg-red-950/40 rounded-xl border border-red-900/60 text-white shrink-0">
-                    <div className="text-[10px] uppercase font-bold text-red-400 tracking-wider">
-                        Administration
+                <div className="px-4 py-2 mx-3 my-3 bg-emerald-950/40 rounded-xl border border-emerald-900/60 text-white shrink-0">
+                    <div className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">
+                        Pharmacy Administration
                     </div>
                     <div className="text-xs text-zinc-300 font-semibold mt-0.5">
-                        Platform Control Center
+                        Central Management Hub
                     </div>
                 </div>
             ) : null}
@@ -226,7 +258,7 @@ export default function AdminLayout({
                     className="sticky top-0 z-20 flex items-center justify-between h-16 px-3 sm:px-6 border-b border-slate-200/90 shadow-xs w-full"
                 >
                     <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-                        {/* Unified Sidebar Toggle */}
+                        {/* Sidebar Toggle */}
                         <Button
                             type="text"
                             icon={
@@ -244,63 +276,74 @@ export default function AdminLayout({
                             className="text-slate-700 hover:text-slate-900 flex items-center justify-center p-2 rounded-lg"
                         />
 
-                        {/* Mobile Logo Anchor */}
                         {isMobileScreen && (
                             <div className="flex items-center">
-                                <Link href={home().url}>
-                                    <SamPickleLogo size="sm" showBadge={false} />
+                                <Link href="/admin/dashboard" className="flex items-center">
+                                    <PharmaLogo variant="dark" collapsed={true} />
                                 </Link>
                             </div>
                         )}
 
-                        {breadcrumbs.length > 0 && (
-                            <div className="hidden md:flex min-w-0">
-                                <Breadcrumb
-                                    items={[
-                                        {
-                                            title: (
-                                                <Link href="/admin/dashboard" className="text-slate-500 hover:text-red-700">
-                                                    <HomeOutlined />
-                                                </Link>
-                                            ),
-                                        },
-                                        ...breadcrumbs.map((b) => ({
-                                            title: b.href ? (
-                                                <Link href={b.href} className="text-slate-600 hover:text-red-700">
-                                                    {b.title}
-                                                </Link>
-                                            ) : (
-                                                <span className="font-semibold text-slate-800 truncate">{b.title}</span>
-                                            ),
-                                        })),
-                                    ]}
-                                />
-                            </div>
-                        )}
+                        <div className="hidden sm:block min-w-0">
+                            <Breadcrumb
+                                items={[
+                                    {
+                                        href: '/admin/dashboard',
+                                        title: (
+                                            <span className="flex items-center gap-1 font-semibold text-slate-500">
+                                                <HomeOutlined />
+                                                <span>Admin</span>
+                                            </span>
+                                        ),
+                                    },
+                                    ...breadcrumbs.map((b) => ({
+                                        href: typeof b.href === 'string' ? b.href : undefined,
+                                        title: <span className="font-semibold text-slate-800">{b.title}</span>,
+                                    })),
+                                ]}
+                            />
+                        </div>
                     </div>
 
+                    {/* TOPBAR RIGHT ACTIONS */}
                     <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        <Tag color="red" className="font-bold text-xs m-0 px-2 py-0.5">
-                            System Admin
-                        </Tag>
+                        <Link href="/cashier/pos">
+                            <Button
+                                type="primary"
+                                icon={<ShoppingCartOutlined />}
+                                className="bg-emerald-600 hover:bg-emerald-700 border-none font-semibold text-xs h-9 rounded-lg shadow-sm"
+                            >
+                                <span className="hidden md:inline">Open</span> POS Terminal
+                            </Button>
+                        </Link>
 
-                        <Dropdown menu={{ items: userDropdownItems }} placement="bottomRight" trigger={['click']}>
-                            <button className="flex items-center gap-1.5 sm:gap-2 p-1 pl-1.5 sm:pl-2 pr-2 sm:pr-3 rounded-full border border-slate-200 hover:border-red-600 bg-white transition-all cursor-pointer">
-                                <Avatar size={28} className="bg-red-700 text-white font-bold text-xs">
-                                    A
+                        <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+
+                        {/* User Profile Dropdown */}
+                        <Dropdown menu={{ items: userDropdownItems }} trigger={['click']} placement="bottomRight">
+                            <div className="flex items-center gap-2 sm:gap-3 cursor-pointer py-1 px-2 rounded-xl hover:bg-slate-100 transition-colors select-none">
+                                <Avatar
+                                    src={user?.avatar}
+                                    className="bg-emerald-700 text-white font-bold ring-2 ring-emerald-500/20 shrink-0"
+                                >
+                                    {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
                                 </Avatar>
-                                <span className="text-xs font-semibold text-slate-700 hidden md:inline max-w-[120px] truncate">
-                                    {user?.name}
-                                </span>
-                            </button>
+                                <div className="hidden md:block text-left leading-tight">
+                                    <span className="text-xs font-bold text-slate-800 block truncate max-w-[130px]">
+                                        {user?.name || 'Admin Pharmacist'}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-bold block uppercase tracking-wider">
+                                        Admin
+                                    </span>
+                                </div>
+                            </div>
                         </Dropdown>
                     </div>
                 </Header>
 
-                <Content className="p-3 sm:p-6 lg:p-8 flex-1 min-w-0 w-full overflow-x-hidden">
-                    <div className="max-w-7xl mx-auto w-full min-w-0">
-                        {children}
-                    </div>
+                {/* CONTENT INJECTOR */}
+                <Content className="p-4 sm:p-6 lg:p-8 flex-1 w-full max-w-7xl mx-auto min-w-0 overflow-y-auto">
+                    {children}
                 </Content>
             </Layout>
         </Layout>

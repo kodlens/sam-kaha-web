@@ -8,7 +8,6 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -33,62 +32,33 @@ class RegisteredUserController extends Controller
             'fname' => ['required', 'string', 'max:255'],
             'mname' => ['nullable', 'string', 'max:255'],
             'lname' => ['required', 'string', 'max:255'],
-            'sex' => ['required', 'string', 'in:male,female'],
+            'sex' => ['nullable', 'string', 'in:male,female'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => ['required', 'string', 'in:player,organizer'],
-            'organization_name' => ['required_if:role,organizer', 'nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:255'],
-            'skill_rating' => ['nullable', 'string', 'max:20'],
         ], [
             'fname.required' => 'First name is required.',
             'lname.required' => 'Last name is required.',
-            'sex.required' => 'Please select biological sex (required for tournament division bracket eligibility).',
-            'organization_name.required_if' => 'Organization or club name is required for tournament organizers.',
         ]);
 
-        $user = DB::transaction(function () use ($request) {
-            $isOrganizer = $request->role === 'organizer';
-            $fullName = trim("{$request->fname} {$request->mname} {$request->lname}");
+        $fullName = trim("{$request->fname} {$request->mname} {$request->lname}");
+        
+        // If this is the very first user, assign admin; otherwise cashier
+        $role = User::count() === 0 ? 'admin' : 'cashier';
 
-            $user = User::create([
-                'fname' => $request->fname,
-                'mname' => $request->mname,
-                'lname' => $request->lname,
-                'sex' => strtolower($request->sex),
-                'name' => $fullName,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'role' => $isOrganizer ? 'org' : 'player',
-                'active_role' => $isOrganizer ? 'organizer' : 'player',
-                'can_organize' => $isOrganizer,
-                'can_play' => true,
-                'subscription_type' => $isOrganizer ? 'pro' : 'free',
-                'subscription_status' => $isOrganizer ? 'trialing' : 'active',
-                'trial_ends_at' => $isOrganizer ? now()->addDays(14) : null,
-            ]);
-
-            if ($isOrganizer) {
-                $user->organizerProfile()->create([
-                    'organization_name' => $request->organization_name ?? 'My Club',
-                    'city' => $request->city,
-                    'verified_status' => 'active',
-                ]);
-
-                // Organizers can also play in tournaments
-                $user->playerProfile()->create([
-                    'skill_rating' => $request->skill_rating ?? '3.5',
-                    'milestone_points' => 0,
-                ]);
-            } else {
-                $user->playerProfile()->create([
-                    'skill_rating' => $request->skill_rating ?? '3.0',
-                    'milestone_points' => 0,
-                ]);
-            }
-
-            return $user;
-        });
+        $user = User::create([
+            'fname' => $request->fname,
+            'mname' => $request->mname,
+            'lname' => $request->lname,
+            'sex' => $request->sex ? strtolower($request->sex) : null,
+            'name' => $fullName,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'password' => Hash::make($request->password),
+            'role' => $role,
+            'status' => 'active',
+            'pin' => '0000',
+        ]);
 
         event(new Registered($user));
 
