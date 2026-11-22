@@ -2,6 +2,7 @@ export type UnitOfMeasure = {
     id: number;
     name: string; // e.g. 'Box', 'Strip', 'Piece', 'Bottle'
     short_code: string; // e.g. 'box', 'strp', 'pc', 'btl'
+    category?: string | null;
     description?: string | null;
     is_active: boolean;
     created_at?: string;
@@ -10,19 +11,37 @@ export type UnitOfMeasure = {
 
 export type DrugClassification = 'otc' | 'prescription' | 'dangerous_drug';
 
+export type ProductUnit = {
+    id?: number;
+    product_id?: number;
+    unit_of_measure_id: number;
+    conversion_factor: number;
+    price: number | string;
+    cost?: number | string | null;
+    barcode?: string | null;
+    is_base_unit: boolean;
+    unit_of_measure?: UnitOfMeasure;
+};
+
 export type Product = {
     id: number;
     brand_name: string;
     generic_name: string;
     dosage_strength?: string | null; // e.g. '500mg', '120mg/5ml'
     dosage_form?: string | null; // e.g. 'Tablet', 'Syrup', 'Capsule'
+    category?: string | null;
     sku: string;
     barcode?: string | null;
     classification: DrugClassification;
     requires_prescription: boolean;
     is_vatable: boolean;
     reorder_level: number;
+    storage_conditions?: string | null;
+    description?: string | null;
     is_active: boolean;
+    full_name?: string;
+    units?: ProductUnit[];
+    base_unit?: ProductUnit;
     created_at?: string;
     updated_at?: string;
 };

@@ -97,7 +97,7 @@ export default function AdminLayout({
         {
             key: '/admin/products',
             icon: <MedicineBoxOutlined className="text-emerald-400" />,
-            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Medicine Masterfile</span>,
+            label: <Link href="/admin/products" onClick={() => setMobileOpen(false)}>Medicine Masterfile</Link>,
         },
         {
             key: '/admin/batches',

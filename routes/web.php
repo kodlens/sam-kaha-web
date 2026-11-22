@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UnitOfMeasureController;
 use App\Http\Controllers\Cashier\PosController;
 use Illuminate\Http\Request;
@@ -30,6 +31,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/uom/{uom}', [UnitOfMeasureController::class, 'update'])->name('uom.update');
         Route::patch('/uom/{uom}/toggle', [UnitOfMeasureController::class, 'toggleStatus'])->name('uom.toggle');
         Route::delete('/uom/{uom}', [UnitOfMeasureController::class, 'destroy'])->name('uom.destroy');
+
+        // Module 3: Medicine & Product Masterfile
+        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+        Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+        Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::patch('/products/{product}/toggle', [ProductController::class, 'toggleStatus'])->name('products.toggle');
+        Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
     });
 
     // Cashier module routes

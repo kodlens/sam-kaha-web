@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,7 +16,7 @@ class DashboardController extends Controller
         return Inertia::render('admin/dashboard', [
             'metrics' => [
                 'totalCashiers' => User::where('role', 'cashier')->count(),
-                'totalProducts' => 0,
+                'totalProducts' => Product::count(),
                 'nearExpiryCount' => 0,
                 'todaySales' => 0.00,
             ],
