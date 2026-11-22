@@ -16,8 +16,7 @@ import {
     message,
     Radio,
     InputNumber,
-    Divider,
-    Alert,
+    Segmented,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -29,11 +28,12 @@ import {
     ReloadOutlined,
     BarcodeOutlined,
     FileProtectOutlined,
+    ShoppingCartOutlined,
+    SkinOutlined,
     SafetyCertificateOutlined,
-    InfoCircleOutlined,
-    DollarOutlined,
+    IdcardOutlined,
 } from '@ant-design/icons';
-import type { Product, ProductUnit, UnitOfMeasure } from '@/types/pharmacy';
+import type { Product, ProductType, UnitOfMeasure } from '@/types/pharmacy';
 
 interface ProductsPageProps {
     products: Product[];
@@ -41,6 +41,7 @@ interface ProductsPageProps {
     unitsOfMeasure: UnitOfMeasure[];
     filters: {
         search: string;
+        product_type: string;
         classification: string;
         category: string;
         vat_status: string;
@@ -55,6 +56,7 @@ export default function ProductsIndex({
     filters,
 }: ProductsPageProps) {
     const [search, setSearch] = useState(filters.search || '');
+    const [typeFilter, setTypeFilter] = useState(filters.product_type || 'all');
     const [classificationFilter, setClassificationFilter] = useState(filters.classification || '');
     const [categoryFilter, setCategoryFilter] = useState(filters.category || '');
     const [vatFilter, setVatFilter] = useState(filters.vat_status || '');
@@ -63,10 +65,11 @@ export default function ProductsIndex({
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-    // Default base UOM (e.g. Piece / Tablet)
+    // Default base UOM
     const defaultBaseUom = unitsOfMeasure.find((u) => u.short_code === 'pc') || unitsOfMeasure[0];
 
     const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm<{
+        product_type: ProductType;
         brand_name: string;
         generic_name: string;
         dosage_strength: string;
@@ -74,9 +77,10 @@ export default function ProductsIndex({
         category: string;
         sku: string;
         barcode: string;
-        classification: 'otc' | 'prescription' | 'dangerous_drug';
+        classification: 'otc' | 'prescription' | 'dangerous_drug' | 'general';
         requires_prescription: boolean;
         is_vatable: boolean;
+        sc_pwd_discountable: boolean;
         reorder_level: number;
         storage_conditions: string;
         description: string;
@@ -89,6 +93,7 @@ export default function ProductsIndex({
             is_base_unit: boolean;
         }[];
     }>({
+        product_type: 'medicine',
         brand_name: '',
         generic_name: '',
         dosage_strength: '500mg',
@@ -99,6 +104,7 @@ export default function ProductsIndex({
         classification: 'otc',
         requires_prescription: false,
         is_vatable: true,
+        sc_pwd_discountable: true,
         reorder_level: 20,
         storage_conditions: 'Store below 30°C',
         description: '',
@@ -114,11 +120,13 @@ export default function ProductsIndex({
         ],
     });
 
-    const handleSearch = () => {
+    const handleSearch = (newType?: string) => {
+        const activeType = newType !== undefined ? newType : typeFilter;
         router.get(
             '/admin/products',
             {
                 search: search || undefined,
+                product_type: activeType !== 'all' ? activeType : undefined,
                 classification: classificationFilter || undefined,
                 category: categoryFilter || undefined,
                 vat_status: vatFilter || undefined,
@@ -128,8 +136,15 @@ export default function ProductsIndex({
         );
     };
 
+    const handleTypeChange = (value: string | number) => {
+        const val = String(value);
+        setTypeFilter(val);
+        handleSearch(val);
+    };
+
     const handleReset = () => {
         setSearch('');
+        setTypeFilter('all');
         setClassificationFilter('');
         setCategoryFilter('');
         setVatFilter('');
@@ -137,22 +152,28 @@ export default function ProductsIndex({
         router.get('/admin/products', {}, { preserveState: true, replace: true });
     };
 
-    const openCreateModal = () => {
+    const openCreateModal = (presetType: ProductType = 'medicine') => {
         setEditingProduct(null);
         clearErrors();
         reset();
+
         const initialUomId = defaultBaseUom ? defaultBaseUom.id : unitsOfMeasure[0]?.id || 1;
+        const isMed = presetType === 'medicine';
+        const isGrocery = presetType === 'grocery';
+
         setData({
+            product_type: presetType,
             brand_name: '',
-            generic_name: '',
-            dosage_strength: '500mg',
-            dosage_form: 'Tablet',
-            category: 'Analgesic',
-            sku: 'MED-' + Math.floor(1000 + Math.random() * 9000),
+            generic_name: isMed ? '' : '',
+            dosage_strength: isMed ? '500mg' : isGrocery ? '500ml' : '',
+            dosage_form: isMed ? 'Tablet' : isGrocery ? 'Bottle' : 'Pack',
+            category: isMed ? 'Analgesic' : isGrocery ? 'Toiletries' : 'Medical Supplies',
+            sku: (isMed ? 'MED-' : isGrocery ? 'GRO-' : 'SUP-') + Math.floor(1000 + Math.random() * 9000),
             barcode: '',
-            classification: 'otc',
+            classification: isMed ? 'otc' : 'general',
             requires_prescription: false,
             is_vatable: true,
+            sc_pwd_discountable: isMed || presetType === 'medical_supply',
             reorder_level: 20,
             storage_conditions: 'Store below 30°C',
             description: '',
@@ -161,8 +182,8 @@ export default function ProductsIndex({
                 {
                     unit_of_measure_id: initialUomId,
                     conversion_factor: 1,
-                    price: 10.0,
-                    cost: 6.0,
+                    price: 15.0,
+                    cost: 10.0,
                     is_base_unit: true,
                 },
             ],
@@ -174,7 +195,7 @@ export default function ProductsIndex({
         setEditingProduct(product);
         clearErrors();
 
-        const formattedUnits = (product.units && product.units.length > 0)
+        const formattedUnits = product.units && product.units.length > 0
             ? product.units.map((u) => ({
                   unit_of_measure_id: u.unit_of_measure_id,
                   conversion_factor: u.conversion_factor,
@@ -193,16 +214,18 @@ export default function ProductsIndex({
               ];
 
         setData({
+            product_type: product.product_type,
             brand_name: product.brand_name,
-            generic_name: product.generic_name,
+            generic_name: product.generic_name || '',
             dosage_strength: product.dosage_strength || '',
-            dosage_form: product.dosage_form || 'Tablet',
+            dosage_form: product.dosage_form || '',
             category: product.category || '',
             sku: product.sku,
             barcode: product.barcode || '',
             classification: product.classification,
             requires_prescription: product.requires_prescription,
             is_vatable: product.is_vatable,
+            sc_pwd_discountable: product.sc_pwd_discountable,
             reorder_level: product.reorder_level,
             storage_conditions: product.storage_conditions || '',
             description: product.description || '',
@@ -224,14 +247,14 @@ export default function ProductsIndex({
         if (editingProduct) {
             put(`/admin/products/${editingProduct.id}`, {
                 onSuccess: () => {
-                    message.success(`Medicine '${data.brand_name}' updated.`);
+                    message.success(`Item '${data.brand_name}' updated.`);
                     setIsModalOpen(false);
                 },
             });
         } else {
             post('/admin/products', {
                 onSuccess: () => {
-                    message.success(`Medicine '${data.brand_name}' created.`);
+                    message.success(`Item '${data.brand_name}' created.`);
                     setIsModalOpen(false);
                 },
             });
@@ -255,7 +278,7 @@ export default function ProductsIndex({
         router.delete(`/admin/products/${product.id}`, {
             preserveScroll: true,
             onSuccess: () => {
-                message.success(`Medicine '${product.brand_name}' deleted.`);
+                message.success(`Item '${product.brand_name}' deleted.`);
             },
         });
     };
@@ -284,7 +307,6 @@ export default function ProductsIndex({
             return;
         }
         const updated = data.units.filter((_, i) => i !== index);
-        // If the removed unit was the base unit, assign the first item as base
         if (data.units[index].is_base_unit && updated.length > 0) {
             updated[0].is_base_unit = true;
             updated[0].conversion_factor = 1;
@@ -307,80 +329,125 @@ export default function ProductsIndex({
         setData('units', updated);
     };
 
+    // Item count helpers
+    const totalMeds = products.filter((p) => p.product_type === 'medicine').length;
+    const totalGroceries = products.filter((p) => p.product_type === 'grocery').length;
+    const totalSupplies = products.filter((p) => p.product_type === 'medical_supply').length;
+
     const columns: ColumnsType<Product> = [
         {
-            title: 'Medicine / Generic Details',
+            title: 'Item & Formulation Details',
             dataIndex: 'brand_name',
             key: 'brand_name',
-            render: (_: string, record: Product) => (
-                <div className="flex items-start gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg shrink-0 mt-0.5">
-                        <MedicineBoxOutlined />
+            render: (_: string, record: Product) => {
+                const isMed = record.product_type === 'medicine';
+                const isGrocery = record.product_type === 'grocery';
+
+                return (
+                    <div className="flex items-start gap-3">
+                        <div
+                            className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 mt-0.5 ${
+                                isMed
+                                    ? 'bg-emerald-50 text-emerald-600'
+                                    : isGrocery
+                                    ? 'bg-blue-50 text-blue-600'
+                                    : 'bg-purple-50 text-purple-600'
+                            }`}
+                        >
+                            {isMed ? (
+                                <MedicineBoxOutlined />
+                            ) : isGrocery ? (
+                                <ShoppingCartOutlined />
+                            ) : (
+                                <SafetyCertificateOutlined />
+                            )}
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-slate-900 text-sm">{record.brand_name}</span>
+                                {record.dosage_strength && (
+                                    <Tag className="text-[10px] font-bold m-0 bg-slate-100 text-slate-700 border-slate-200">
+                                        {record.dosage_strength}
+                                    </Tag>
+                                )}
+                            </div>
+
+                            {isMed && record.generic_name ? (
+                                <div className="text-xs text-slate-500 font-medium italic mt-0.5">
+                                    {record.generic_name} {record.dosage_form ? `• ${record.dosage_form}` : ''}
+                                </div>
+                            ) : (
+                                <div className="text-xs text-slate-500 font-medium mt-0.5">
+                                    {record.category || 'Grocery Item'} {record.dosage_form ? `• ${record.dosage_form}` : ''}
+                                </div>
+                            )}
+
+                            <div className="text-[11px] text-slate-400 mt-0.5">
+                                SKU: <span className="font-mono text-slate-600">{record.sku}</span>
+                                {record.barcode && (
+                                    <span className="ml-2">
+                                        Barcode: <span className="font-mono text-slate-600">{record.barcode}</span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-slate-900 text-sm">{record.brand_name}</span>
-                            {record.dosage_strength && (
-                                <Tag className="text-[10px] font-bold m-0 bg-slate-100 text-slate-700 border-slate-200">
-                                    {record.dosage_strength}
+                );
+            },
+        },
+        {
+            title: 'Department',
+            dataIndex: 'product_type',
+            key: 'product_type',
+            render: (type: ProductType, record: Product) => {
+                if (type === 'medicine') {
+                    return (
+                        <div className="space-y-1">
+                            <Tag color="green" className="font-bold text-[10px] uppercase px-1.5 py-0.2">
+                                💊 Medicine
+                            </Tag>
+                            {record.classification === 'prescription' ? (
+                                <Tag color="orange" className="font-semibold text-[10px] flex items-center gap-1 w-fit">
+                                    <FileProtectOutlined /> Rx Prescription
+                                </Tag>
+                            ) : (
+                                <Tag color="blue" className="font-semibold text-[10px]">
+                                    OTC
                                 </Tag>
                             )}
                         </div>
-                        <div className="text-xs text-slate-500 font-medium italic mt-0.5">
-                            {record.generic_name} {record.dosage_form ? `• ${record.dosage_form}` : ''}
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                            SKU: <span className="font-mono text-slate-600">{record.sku}</span>
-                            {record.barcode && (
-                                <span className="ml-2">
-                                    Barcode: <span className="font-mono text-slate-600">{record.barcode}</span>
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            ),
-        },
-        {
-            title: 'Classification',
-            dataIndex: 'classification',
-            key: 'classification',
-            render: (classification: string, record: Product) => {
-                if (classification === 'otc') {
-                    return (
-                        <Tag color="blue" className="font-semibold text-xs px-2 py-0.5">
-                            OTC (Over-The-Counter)
-                        </Tag>
                     );
                 }
-                if (classification === 'dangerous_drug') {
+                if (type === 'grocery') {
                     return (
-                        <Tag color="red" className="font-bold text-xs px-2 py-0.5">
-                            Regulated / S-2
+                        <Tag color="cyan" className="font-bold text-xs px-2 py-0.5">
+                            🛒 Grocery / Care
                         </Tag>
                     );
                 }
                 return (
-                    <Tag color="orange" className="font-semibold text-xs px-2 py-0.5 flex items-center gap-1 w-fit">
-                        <FileProtectOutlined /> Rx Prescription
+                    <Tag color="purple" className="font-bold text-xs px-2 py-0.5">
+                        🩹 Medical Supply
                     </Tag>
                 );
             },
         },
         {
-            title: 'Philippine Tax (VAT)',
-            dataIndex: 'is_vatable',
-            key: 'is_vatable',
-            render: (isVatable: boolean) => (
+            title: 'Senior / PWD 20%',
+            dataIndex: 'sc_pwd_discountable',
+            key: 'sc_pwd_discountable',
+            render: (isDiscountable: boolean, record: Product) => (
                 <div>
-                    {isVatable ? (
-                        <Tag color="purple" className="font-medium text-xs">
-                            12% Vatable
-                        </Tag>
+                    {isDiscountable ? (
+                        <Tooltip title="Eligible for 20% statutory discount + VAT exemption under RA 9994 (Senior Citizens) & RA 10754 (PWD).">
+                            <Tag color="gold" className="font-bold text-[11px] px-2 py-0.5 flex items-center gap-1 w-fit">
+                                <IdcardOutlined /> SC/PWD Eligible
+                            </Tag>
+                        </Tooltip>
                     ) : (
-                        <Tooltip title="Exempted from 12% VAT under Republic Act 10963 / 11534 for designated medicines (e.g. Diabetes, Hypertension, Cancer).">
-                            <Tag color="green" className="font-bold text-xs">
-                                VAT-Exempt (TRAIN)
+                        <Tooltip title="Standard grocery / non-medical goods are not subject to the 20% medicine discount per BIR rules.">
+                            <Tag color="default" className="text-[11px] text-slate-500">
+                                Non-Discountable
                             </Tag>
                         </Tooltip>
                     )}
@@ -436,7 +503,7 @@ export default function ProductsIndex({
             align: 'right',
             render: (_: any, record: Product) => (
                 <Space size="small">
-                    <Tooltip title="Edit Medicine Details">
+                    <Tooltip title="Edit Product">
                         <Button
                             type="text"
                             icon={<EditOutlined className="text-slate-600 hover:text-emerald-600" />}
@@ -445,7 +512,7 @@ export default function ProductsIndex({
                     </Tooltip>
 
                     <Popconfirm
-                        title="Delete Medicine?"
+                        title="Delete Item?"
                         description={`Are you sure you want to delete '${record.brand_name}'?`}
                         onConfirm={() => handleDelete(record)}
                         okText="Yes, Delete"
@@ -465,12 +532,12 @@ export default function ProductsIndex({
         <AdminLayout
             breadcrumbs={[
                 {
-                    title: 'Medicine Masterfile',
+                    title: 'Product Catalog',
                     href: '/admin/products',
                 },
             ]}
         >
-            <Head title="Medicine & Product Masterfile - SAM PHARMA" />
+            <Head title="Medicine & Grocery Masterfile - SAM PHARMA" />
 
             <div className="space-y-5">
                 {/* PAGE HEADER */}
@@ -478,67 +545,75 @@ export default function ProductsIndex({
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <Tag color="green" className="font-bold text-[10px] uppercase m-0">
-                                Philippine Generics Act (RA 6675)
+                                Unified Catalog
                             </Tag>
                             <span className="text-xs text-slate-400 font-semibold">
-                                Module 3
+                                Medicines, Groceries & Supplies
                             </span>
                         </div>
                         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 m-0">
-                            Medicine & Product Masterfile
+                            Pharmacy & Retail Masterfile
                         </h1>
                         <p className="text-slate-500 text-xs sm:text-sm mt-0.5 m-0">
-                            Manage pharmaceutical formulations, brand names, generic active molecules, Rx classifications, and multi-tier pricing.
+                            Manage pharmaceutical formulas with Generics Act compliance, alongside toiletries, baby care, and grocery convenience items.
                         </p>
                     </div>
 
-                    <div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            icon={<ShoppingCartOutlined />}
+                            size="large"
+                            onClick={() => openCreateModal('grocery')}
+                            className="bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 font-bold rounded-xl h-11 px-4"
+                        >
+                            + Grocery
+                        </Button>
                         <Button
                             type="primary"
                             icon={<PlusOutlined />}
                             size="large"
-                            onClick={openCreateModal}
+                            onClick={() => openCreateModal('medicine')}
                             className="bg-emerald-600 hover:bg-emerald-700 font-bold border-none rounded-xl h-11 px-5 shadow-sm"
                         >
-                            Add New Medicine
+                            + Medicine
                         </Button>
                     </div>
+                </div>
+
+                {/* SEGMENTED DEPARTMENT TABS */}
+                <div className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-xs">
+                    <Segmented
+                        size="large"
+                        value={typeFilter}
+                        onChange={handleTypeChange}
+                        block
+                        options={[
+                            { label: `All Items (${products.length})`, value: 'all' },
+                            { label: `💊 Medicines (${totalMeds})`, value: 'medicine' },
+                            { label: `🛒 Groceries & Toiletries (${totalGroceries})`, value: 'grocery' },
+                            { label: `🩹 Medical Supplies (${totalSupplies})`, value: 'medical_supply' },
+                        ]}
+                    />
                 </div>
 
                 {/* SEARCH & FILTERS BAR */}
                 <Card className="rounded-2xl border-slate-200 shadow-xs" styles={{ body: { padding: '16px' } }}>
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                        <div className="sm:col-span-4">
+                        <div className="sm:col-span-5">
                             <Input
-                                placeholder="Search by Brand, Generic, SKU, Barcode, or Dosage..."
+                                placeholder="Search by Brand, Generic, SKU, Barcode, or Size..."
                                 prefix={<SearchOutlined className="text-slate-400" />}
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                onPressEnter={handleSearch}
+                                onPressEnter={() => handleSearch()}
                                 className="rounded-xl"
                                 allowClear
                             />
                         </div>
 
-                        <div className="sm:col-span-2">
+                        <div className="sm:col-span-3">
                             <Select
-                                placeholder="Classification"
-                                value={classificationFilter || undefined}
-                                onChange={(val) => setClassificationFilter(val || '')}
-                                className="w-full"
-                                allowClear
-                                options={[
-                                    { label: 'All Classifications', value: '' },
-                                    { label: 'OTC (Over-The-Counter)', value: 'otc' },
-                                    { label: 'Rx Prescription', value: 'prescription' },
-                                    { label: 'Regulated / Dangerous Drug', value: 'dangerous_drug' },
-                                ]}
-                            />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                            <Select
-                                placeholder="Category"
+                                placeholder="Filter Category"
                                 value={categoryFilter || undefined}
                                 onChange={(val) => setCategoryFilter(val || '')}
                                 className="w-full"
@@ -552,15 +627,15 @@ export default function ProductsIndex({
 
                         <div className="sm:col-span-2">
                             <Select
-                                placeholder="VAT Status"
-                                value={vatFilter !== '' ? vatFilter : undefined}
-                                onChange={(val) => setVatFilter(val || '')}
+                                placeholder="Status"
+                                value={statusFilter !== '' ? statusFilter : undefined}
+                                onChange={(val) => setStatusFilter(val || '')}
                                 className="w-full"
                                 allowClear
                                 options={[
-                                    { label: 'All Tax Types', value: '' },
-                                    { label: '12% Vatable', value: 'vatable' },
-                                    { label: 'VAT-Exempt (TRAIN)', value: 'vat_exempt' },
+                                    { label: 'All Statuses', value: '' },
+                                    { label: 'Active Only', value: 'active' },
+                                    { label: 'Inactive Only', value: 'inactive' },
                                 ]}
                             />
                         </div>
@@ -568,7 +643,7 @@ export default function ProductsIndex({
                         <div className="sm:col-span-2 flex items-center gap-2">
                             <Button
                                 type="primary"
-                                onClick={handleSearch}
+                                onClick={() => handleSearch()}
                                 className="bg-slate-800 hover:bg-slate-900 border-none font-bold rounded-xl flex-1"
                             >
                                 Filter
@@ -591,7 +666,7 @@ export default function ProductsIndex({
                         rowKey="id"
                         pagination={{
                             pageSize: 10,
-                            showTotal: (total) => `Total ${total} medicines`,
+                            showTotal: (total) => `Total ${total} items in catalog`,
                         }}
                     />
                 </Card>
@@ -601,8 +676,24 @@ export default function ProductsIndex({
             <Modal
                 title={
                     <div className="flex items-center gap-2 text-slate-900 font-bold text-base pb-2 border-b border-slate-100">
-                        <MedicineBoxOutlined className="text-emerald-600" />
-                        <span>{editingProduct ? 'Edit Medicine & Packaging' : 'New Medicine Master Record'}</span>
+                        {data.product_type === 'medicine' ? (
+                            <MedicineBoxOutlined className="text-emerald-600" />
+                        ) : data.product_type === 'grocery' ? (
+                            <ShoppingCartOutlined className="text-sky-600" />
+                        ) : (
+                            <SafetyCertificateOutlined className="text-purple-600" />
+                        )}
+                        <span>
+                            {editingProduct
+                                ? `Edit ${data.brand_name || 'Product'}`
+                                : `New ${
+                                      data.product_type === 'medicine'
+                                          ? 'Medicine'
+                                          : data.product_type === 'grocery'
+                                          ? 'Grocery Item'
+                                          : 'Medical Supply'
+                                  }`}
+                        </span>
                     </div>
                 }
                 open={isModalOpen}
@@ -612,24 +703,45 @@ export default function ProductsIndex({
                 className="rounded-2xl"
             >
                 <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                    {/* SECTION 1: DRUG IDENTIFICATION */}
+                    {/* DEPARTMENT SELECTOR RADIO */}
+                    <div className="p-3 bg-slate-100 rounded-xl flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 uppercase">Product Department:</span>
+                        <Radio.Group
+                            value={data.product_type}
+                            onChange={(e) => {
+                                const newType = e.target.value as ProductType;
+                                setData((prev) => ({
+                                    ...prev,
+                                    product_type: newType,
+                                    sc_pwd_discountable: newType === 'medicine' || newType === 'medical_supply',
+                                    classification: newType === 'medicine' ? 'otc' : 'general',
+                                    requires_prescription: false,
+                                }));
+                            }}
+                        >
+                            <Radio.Button value="medicine" className="font-semibold">💊 Medicine</Radio.Button>
+                            <Radio.Button value="grocery" className="font-semibold">🛒 Grocery / Care</Radio.Button>
+                            <Radio.Button value="medical_supply" className="font-semibold">🩹 Medical Supply</Radio.Button>
+                        </Radio.Group>
+                    </div>
+
+                    {/* SECTION 1: PRODUCT DETAILS */}
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                                1. Drug Identification (Generics Act Compliant)
-                            </span>
-                            <span className="text-[11px] text-emerald-700 font-semibold">
-                                Prominently displayed at POS
-                            </span>
-                        </div>
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                            1. Item Identification & Details
+                        </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Brand Name * (e.g. Biogesic, Amoxil)
+                                    {data.product_type === 'medicine' ? 'Brand Name *' : 'Item / Brand Name *'}
                                 </label>
                                 <Input
-                                    placeholder="e.g. Biogesic"
+                                    placeholder={
+                                        data.product_type === 'medicine'
+                                            ? 'e.g. Biogesic'
+                                            : 'e.g. Safeguard Soap / Nature\'s Spring'
+                                    }
                                     value={data.brand_name}
                                     onChange={(e) => setData('brand_name', e.target.value)}
                                     status={errors.brand_name ? 'error' : ''}
@@ -641,31 +753,45 @@ export default function ProductsIndex({
                                 )}
                             </div>
 
-                            <div>
-                                <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Generic Name * (Active Molecule, e.g. Paracetamol)
-                                </label>
-                                <Input
-                                    placeholder="e.g. Paracetamol"
-                                    value={data.generic_name}
-                                    onChange={(e) => setData('generic_name', e.target.value)}
-                                    status={errors.generic_name ? 'error' : ''}
-                                    className="rounded-xl"
-                                    required
-                                />
-                                {errors.generic_name && (
-                                    <span className="text-xs text-red-600 mt-1 block">{errors.generic_name}</span>
-                                )}
-                            </div>
+                            {data.product_type === 'medicine' ? (
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Generic Name * (Active Molecule, RA 6675)
+                                    </label>
+                                    <Input
+                                        placeholder="e.g. Paracetamol"
+                                        value={data.generic_name}
+                                        onChange={(e) => setData('generic_name', e.target.value)}
+                                        status={errors.generic_name ? 'error' : ''}
+                                        className="rounded-xl"
+                                        required
+                                    />
+                                    {errors.generic_name && (
+                                        <span className="text-xs text-red-600 mt-1 block">{errors.generic_name}</span>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Category (e.g. Toiletries, Beverages, Baby Care)
+                                    </label>
+                                    <Input
+                                        placeholder="e.g. Toiletries & Hygiene"
+                                        value={data.category}
+                                        onChange={(e) => setData('category', e.target.value)}
+                                        className="rounded-xl"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Dosage Strength (e.g. 500mg, 10mg)
+                                    {data.product_type === 'medicine' ? 'Dosage Strength' : 'Net Content / Size'}
                                 </label>
                                 <Input
-                                    placeholder="500mg"
+                                    placeholder={data.product_type === 'medicine' ? 'e.g. 500mg' : 'e.g. 500ml, 135g, Large'}
                                     value={data.dosage_strength}
                                     onChange={(e) => setData('dosage_strength', e.target.value)}
                                     className="rounded-xl"
@@ -674,31 +800,42 @@ export default function ProductsIndex({
 
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Dosage Form
+                                    {data.product_type === 'medicine' ? 'Dosage Form' : 'Packaging Type'}
                                 </label>
                                 <Select
                                     value={data.dosage_form}
                                     onChange={(val) => setData('dosage_form', val)}
                                     className="w-full"
-                                    options={[
-                                        { label: 'Tablet', value: 'Tablet' },
-                                        { label: 'Capsule', value: 'Capsule' },
-                                        { label: 'Syrup', value: 'Syrup' },
-                                        { label: 'Suspension', value: 'Suspension' },
-                                        { label: 'Nebule', value: 'Nebule' },
-                                        { label: 'Oral Drops', value: 'Oral Drops' },
-                                        { label: 'Ointment / Cream', value: 'Ointment / Cream' },
-                                        { label: 'Injectable Solution', value: 'Injectable Solution' },
-                                    ]}
+                                    options={
+                                        data.product_type === 'medicine'
+                                            ? [
+                                                  { label: 'Tablet', value: 'Tablet' },
+                                                  { label: 'Capsule', value: 'Capsule' },
+                                                  { label: 'Syrup', value: 'Syrup' },
+                                                  { label: 'Suspension', value: 'Suspension' },
+                                                  { label: 'Nebule', value: 'Nebule' },
+                                                  { label: 'Drops', value: 'Drops' },
+                                                  { label: 'Ointment / Cream', value: 'Ointment / Cream' },
+                                              ]
+                                            : [
+                                                  { label: 'Bottle', value: 'Bottle' },
+                                                  { label: 'Bar', value: 'Bar' },
+                                                  { label: 'Tube', value: 'Tube' },
+                                                  { label: 'Pack', value: 'Pack' },
+                                                  { label: 'Can / Tin', value: 'Can' },
+                                                  { label: 'Box', value: 'Box' },
+                                                  { label: 'Sachet', value: 'Sachet' },
+                                              ]
+                                    }
                                 />
                             </div>
 
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Therapeutic Category
+                                    {data.product_type === 'medicine' ? 'Therapeutic Class' : 'Brand Line / Variant'}
                                 </label>
                                 <Input
-                                    placeholder="e.g. Antibiotic"
+                                    placeholder={data.product_type === 'medicine' ? 'e.g. Antibiotic' : 'e.g. Pure White / Mint'}
                                     value={data.category}
                                     onChange={(e) => setData('category', e.target.value)}
                                     className="rounded-xl"
@@ -709,10 +846,10 @@ export default function ProductsIndex({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    SKU Code * (Unique stock code)
+                                    SKU Code *
                                 </label>
                                 <Input
-                                    placeholder="e.g. BIO-500-TAB"
+                                    placeholder="e.g. SAF-WHT-135G"
                                     value={data.sku}
                                     onChange={(e) => setData('sku', e.target.value.toUpperCase())}
                                     status={errors.sku ? 'error' : ''}
@@ -724,11 +861,11 @@ export default function ProductsIndex({
 
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Barcode (EAN-13 / Scan Code)
+                                    Barcode (EAN-13 / Scanner)
                                 </label>
                                 <Input
                                     prefix={<BarcodeOutlined className="text-slate-400" />}
-                                    placeholder="4800016644109"
+                                    placeholder="4902430123456"
                                     value={data.barcode}
                                     onChange={(e) => setData('barcode', e.target.value)}
                                     className="rounded-xl font-mono text-sm"
@@ -737,76 +874,70 @@ export default function ProductsIndex({
                         </div>
                     </div>
 
-                    {/* SECTION 2: REGULATORY & TAX CLASSIFICATION */}
+                    {/* SECTION 2: SENIOR CITIZEN & TAX SETTINGS */}
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                         <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                            2. Regulatory & Philippine Tax Status
+                            2. Regulatory & Philippine Statutory Discount Rules
                         </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Prescription Classification
-                                </label>
-                                <Select
-                                    value={data.classification}
-                                    onChange={(val) => {
-                                        setData((prev) => ({
-                                            ...prev,
-                                            classification: val,
-                                            requires_prescription: val !== 'otc',
-                                        }));
-                                    }}
-                                    className="w-full"
-                                    options={[
-                                        { label: 'OTC (Over-The-Counter)', value: 'otc' },
-                                        { label: 'Rx (Prescription Required)', value: 'prescription' },
-                                        { label: 'Dangerous Drug / S-2 Controlled', value: 'dangerous_drug' },
-                                    ]}
-                                />
-                            </div>
+                            {data.product_type === 'medicine' ? (
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Prescription Classification
+                                    </label>
+                                    <Select
+                                        value={data.classification}
+                                        onChange={(val) => {
+                                            setData((prev) => ({
+                                                ...prev,
+                                                classification: val,
+                                                requires_prescription: val !== 'otc',
+                                            }));
+                                        }}
+                                        className="w-full"
+                                        options={[
+                                            { label: 'OTC (Over-The-Counter)', value: 'otc' },
+                                            { label: 'Rx (Prescription Required)', value: 'prescription' },
+                                            { label: 'Dangerous Drug / S-2 Controlled', value: 'dangerous_drug' },
+                                        ]}
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Item Classification
+                                    </label>
+                                    <Select
+                                        value="general"
+                                        disabled
+                                        className="w-full"
+                                        options={[{ label: 'General Consumer Retail', value: 'general' }]}
+                                    />
+                                </div>
+                            )}
 
                             <div>
                                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Tax Designation
+                                    Senior Citizen / PWD 20% Discount Status
                                 </label>
                                 <Select
-                                    value={data.is_vatable ? 'vatable' : 'exempt'}
-                                    onChange={(val) => setData('is_vatable', val === 'vatable')}
+                                    value={data.sc_pwd_discountable ? 'eligible' : 'ineligible'}
+                                    onChange={(val) => setData('sc_pwd_discountable', val === 'eligible')}
                                     className="w-full"
                                     options={[
-                                        { label: '12% Vatable Sales', value: 'vatable' },
-                                        { label: 'VAT-Exempt (TRAIN / Diabetes & Hypertension List)', value: 'exempt' },
+                                        { label: 'Eligible (20% Off + VAT Exemption)', value: 'eligible' },
+                                        { label: 'Ineligible (Standard Grocery / Retail)', value: 'ineligible' },
                                     ]}
                                 />
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Low Stock Reorder Alert Level (pcs)
-                                </label>
-                                <InputNumber
-                                    min={0}
-                                    value={data.reorder_level}
-                                    onChange={(val) => setData('reorder_level', val || 0)}
-                                    className="w-full rounded-xl"
-                                />
+                        {!data.sc_pwd_discountable && (
+                            <div className="p-2 bg-slate-100 rounded-lg text-[11px] text-slate-600">
+                                ℹ️ Standard groceries and toiletries are excluded from the 20% Senior/PWD medicine discount per BIR/DTI regulations.
                             </div>
-
-                            <div>
-                                <label className="text-xs font-bold text-slate-700 block mb-1">
-                                    Storage Guidelines
-                                </label>
-                                <Input
-                                    placeholder="e.g. Store below 25°C, protect from moisture"
-                                    value={data.storage_conditions}
-                                    onChange={(e) => setData('storage_conditions', e.target.value)}
-                                    className="rounded-xl"
-                                />
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* SECTION 3: MULTI-UNIT PACKAGING & PRICE MATRIX */}
@@ -817,7 +948,7 @@ export default function ProductsIndex({
                                     3. Dispensing Units & Price Matrix
                                 </span>
                                 <span className="text-[11px] text-emerald-700">
-                                    Configure base dispensing unit (e.g. Piece) and bulk packaging (Blister, Box) with conversion ratios.
+                                    Set base dispensing price and bulk pack prices (e.g. 1 Bar = ₱52, 3-Pack = ₱150).
                                 </span>
                             </div>
 
@@ -925,7 +1056,7 @@ export default function ProductsIndex({
                             loading={processing}
                             className="bg-emerald-600 hover:bg-emerald-700 border-none font-bold rounded-xl px-6 shadow-sm"
                         >
-                            {editingProduct ? 'Update Medicine' : 'Save Medicine'}
+                            {editingProduct ? 'Update Item' : 'Save Item'}
                         </Button>
                     </div>
                 </form>

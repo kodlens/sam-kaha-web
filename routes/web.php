@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BatchController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\UnitOfMeasureController;
@@ -38,6 +39,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::patch('/products/{product}/toggle', [ProductController::class, 'toggleStatus'])->name('products.toggle');
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+
+        // Module 4: Batches & Expiry (FEFO)
+        Route::get('/batches', [BatchController::class, 'index'])->name('batches.index');
+        Route::post('/batches', [BatchController::class, 'store'])->name('batches.store');
+        Route::put('/batches/{batch}', [BatchController::class, 'update'])->name('batches.update');
+        Route::patch('/batches/{batch}/quarantine', [BatchController::class, 'quarantine'])->name('batches.quarantine');
+        Route::post('/batches/{batch}/adjust', [BatchController::class, 'adjustStock'])->name('batches.adjust');
     });
 
     // Cashier module routes

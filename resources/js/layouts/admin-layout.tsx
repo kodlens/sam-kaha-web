@@ -102,7 +102,7 @@ export default function AdminLayout({
         {
             key: '/admin/batches',
             icon: <HistoryOutlined className="text-amber-400" />,
-            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Batches & Expiry (FEFO)</span>,
+            label: <Link href="/admin/batches" onClick={() => setMobileOpen(false)}>Batches & Expiry (FEFO)</Link>,
         },
         {
             key: '/admin/discounts',

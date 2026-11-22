@@ -16,11 +16,12 @@ use Inertia\Response;
 class ProductController extends Controller
 {
     /**
-     * Display a listing of medicine products.
+     * Display a listing of medicine and grocery products.
      */
     public function index(Request $request): Response
     {
         $search = $request->input('search');
+        $productType = $request->input('product_type');
         $classification = $request->input('classification');
         $category = $request->input('category');
         $vatStatus = $request->input('vat_status');
@@ -36,6 +37,10 @@ class ProductController extends Controller
                     ->orWhere('barcode', 'like', "%{$search}%")
                     ->orWhere('dosage_strength', 'like', "%{$search}%");
             });
+        }
+
+        if ($productType) {
+            $query->where('product_type', $productType);
         }
 
         if ($classification) {
@@ -69,6 +74,7 @@ class ProductController extends Controller
             'unitsOfMeasure' => $unitsOfMeasure,
             'filters' => [
                 'search' => $search ?? '',
+                'product_type' => $productType ?? '',
                 'classification' => $classification ?? '',
                 'category' => $category ?? '',
                 'vat_status' => $vatStatus ?? '',
@@ -78,21 +84,30 @@ class ProductController extends Controller
     }
 
     /**
-     * Store a newly created product with its UOM matrix.
+     * Store a newly created product (medicine or grocery).
      */
     public function store(Request $request): RedirectResponse
     {
+        $productType = $request->input('product_type', 'medicine');
+
         $validated = $request->validate([
+            'product_type' => ['required', 'in:medicine,grocery,medical_supply'],
             'brand_name' => ['required', 'string', 'max:150'],
-            'generic_name' => ['required', 'string', 'max:200'],
+            'generic_name' => [
+                Rule::requiredIf($productType === 'medicine'),
+                'nullable',
+                'string',
+                'max:200',
+            ],
             'dosage_strength' => ['nullable', 'string', 'max:100'],
             'dosage_form' => ['nullable', 'string', 'max:100'],
             'category' => ['nullable', 'string', 'max:100'],
             'sku' => ['required', 'string', 'max:50', 'unique:products,sku'],
             'barcode' => ['nullable', 'string', 'max:50'],
-            'classification' => ['required', 'in:otc,prescription,dangerous_drug'],
+            'classification' => ['required', 'in:otc,prescription,dangerous_drug,general'],
             'requires_prescription' => ['boolean'],
             'is_vatable' => ['boolean'],
+            'sc_pwd_discountable' => ['boolean'],
             'reorder_level' => ['required', 'integer', 'min:0'],
             'storage_conditions' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -105,18 +120,28 @@ class ProductController extends Controller
             'units.*.is_base_unit' => ['boolean'],
         ]);
 
-        DB::transaction(function () use ($validated, $request) {
+        DB::transaction(function () use ($validated, $request, $productType) {
+            $isMedicine = $productType === 'medicine';
+            $isSupply = $productType === 'medical_supply';
+
+            // Groceries default to non-SC discountable unless explicitly flagged
+            $scDiscountable = $isMedicine || $isSupply
+                ? $request->boolean('sc_pwd_discountable', true)
+                : $request->boolean('sc_pwd_discountable', false);
+
             $product = Product::create([
+                'product_type' => $validated['product_type'],
                 'brand_name' => $validated['brand_name'],
-                'generic_name' => $validated['generic_name'],
+                'generic_name' => $validated['generic_name'] ?? null,
                 'dosage_strength' => $validated['dosage_strength'] ?? null,
                 'dosage_form' => $validated['dosage_form'] ?? null,
                 'category' => $validated['category'] ?? null,
                 'sku' => strtoupper($validated['sku']),
                 'barcode' => $validated['barcode'] ?? null,
                 'classification' => $validated['classification'],
-                'requires_prescription' => $validated['classification'] !== 'otc' || $request->boolean('requires_prescription'),
+                'requires_prescription' => $isMedicine && ($validated['classification'] !== 'otc' || $request->boolean('requires_prescription')),
                 'is_vatable' => $request->boolean('is_vatable', true),
+                'sc_pwd_discountable' => $scDiscountable,
                 'reorder_level' => $validated['reorder_level'],
                 'storage_conditions' => $validated['storage_conditions'] ?? null,
                 'description' => $validated['description'] ?? null,
@@ -135,25 +160,36 @@ class ProductController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', "Medicine '{$validated['brand_name']}' created successfully.");
+        $typeLabel = ucfirst(str_replace('_', ' ', $validated['product_type']));
+
+        return redirect()->back()->with('success', "{$typeLabel} '{$validated['brand_name']}' created successfully.");
     }
 
     /**
-     * Update the specified product and its unit matrix.
+     * Update the specified product.
      */
     public function update(Request $request, Product $product): RedirectResponse
     {
+        $productType = $request->input('product_type', $product->product_type);
+
         $validated = $request->validate([
+            'product_type' => ['required', 'in:medicine,grocery,medical_supply'],
             'brand_name' => ['required', 'string', 'max:150'],
-            'generic_name' => ['required', 'string', 'max:200'],
+            'generic_name' => [
+                Rule::requiredIf($productType === 'medicine'),
+                'nullable',
+                'string',
+                'max:200',
+            ],
             'dosage_strength' => ['nullable', 'string', 'max:100'],
             'dosage_form' => ['nullable', 'string', 'max:100'],
             'category' => ['nullable', 'string', 'max:100'],
             'sku' => ['required', 'string', 'max:50', Rule::unique('products', 'sku')->ignore($product->id)],
             'barcode' => ['nullable', 'string', 'max:50'],
-            'classification' => ['required', 'in:otc,prescription,dangerous_drug'],
+            'classification' => ['required', 'in:otc,prescription,dangerous_drug,general'],
             'requires_prescription' => ['boolean'],
             'is_vatable' => ['boolean'],
+            'sc_pwd_discountable' => ['boolean'],
             'reorder_level' => ['required', 'integer', 'min:0'],
             'storage_conditions' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -166,25 +202,33 @@ class ProductController extends Controller
             'units.*.is_base_unit' => ['boolean'],
         ]);
 
-        DB::transaction(function () use ($product, $validated, $request) {
+        DB::transaction(function () use ($product, $validated, $request, $productType) {
+            $isMedicine = $productType === 'medicine';
+            $isSupply = $productType === 'medical_supply';
+
+            $scDiscountable = $isMedicine || $isSupply
+                ? $request->boolean('sc_pwd_discountable', true)
+                : $request->boolean('sc_pwd_discountable', false);
+
             $product->update([
+                'product_type' => $validated['product_type'],
                 'brand_name' => $validated['brand_name'],
-                'generic_name' => $validated['generic_name'],
+                'generic_name' => $validated['generic_name'] ?? null,
                 'dosage_strength' => $validated['dosage_strength'] ?? null,
                 'dosage_form' => $validated['dosage_form'] ?? null,
                 'category' => $validated['category'] ?? null,
                 'sku' => strtoupper($validated['sku']),
                 'barcode' => $validated['barcode'] ?? null,
                 'classification' => $validated['classification'],
-                'requires_prescription' => $validated['classification'] !== 'otc' || $request->boolean('requires_prescription'),
+                'requires_prescription' => $isMedicine && ($validated['classification'] !== 'otc' || $request->boolean('requires_prescription')),
                 'is_vatable' => $request->boolean('is_vatable', true),
+                'sc_pwd_discountable' => $scDiscountable,
                 'reorder_level' => $validated['reorder_level'],
                 'storage_conditions' => $validated['storage_conditions'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
 
-            // Sync product units: delete removed units and updateOrCreate active ones
             $submittedUomIds = collect($validated['units'])->pluck('unit_of_measure_id')->toArray();
             $product->units()->whereNotIn('unit_of_measure_id', $submittedUomIds)->delete();
 
@@ -204,7 +248,7 @@ class ProductController extends Controller
             }
         });
 
-        return redirect()->back()->with('success', "Medicine '{$validated['brand_name']}' updated successfully.");
+        return redirect()->back()->with('success', "Item '{$validated['brand_name']}' updated successfully.");
     }
 
     /**
@@ -218,7 +262,7 @@ class ProductController extends Controller
 
         $statusStr = $product->is_active ? 'activated' : 'deactivated';
 
-        return redirect()->back()->with('success', "Medicine '{$product->brand_name}' has been {$statusStr}.");
+        return redirect()->back()->with('success', "Item '{$product->brand_name}' has been {$statusStr}.");
     }
 
     /**
@@ -229,6 +273,6 @@ class ProductController extends Controller
         $name = $product->brand_name;
         $product->delete();
 
-        return redirect()->back()->with('success', "Medicine '{$name}' deleted successfully.");
+        return redirect()->back()->with('success', "Item '{$name}' deleted successfully.");
     }
 }

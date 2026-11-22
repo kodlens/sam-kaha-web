@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +18,7 @@ class DashboardController extends Controller
             'metrics' => [
                 'totalCashiers' => User::where('role', 'cashier')->count(),
                 'totalProducts' => Product::count(),
-                'nearExpiryCount' => 0,
+                'nearExpiryCount' => ProductBatch::nearExpiry(90)->count(),
                 'todaySales' => 0.00,
             ],
             'recentShifts' => [],

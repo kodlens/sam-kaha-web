@@ -41,7 +41,7 @@ interface PosProps {
 
 export default function PosTerminal({ cashier, shift }: PosProps) {
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<'all' | 'otc' | 'rx' | 'supplies'>('all');
+    const [selectedCategory, setSelectedCategory] = useState<'all' | 'medicines' | 'groceries' | 'supplies'>('all');
     const [isSeniorModalOpen, setIsSeniorModalOpen] = useState(false);
     const [scIdNumber, setScIdNumber] = useState('');
     const [scCustomerName, setScCustomerName] = useState('');
@@ -65,7 +65,7 @@ export default function PosTerminal({ cashier, shift }: PosProps) {
                                         Scan / F2
                                     </Tag>
                                 }
-                                placeholder="Search by Generic Name (e.g. Paracetamol), Brand, or Scan Barcode..."
+                                placeholder="Search by Generic Name, Brand, Grocery item, or Scan Barcode..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="bg-slate-950 border-slate-800 text-white placeholder-slate-500 rounded-xl py-2"
@@ -88,25 +88,36 @@ export default function PosTerminal({ cashier, shift }: PosProps) {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setSelectedCategory('otc')}
+                                onClick={() => setSelectedCategory('medicines')}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    selectedCategory === 'otc'
+                                    selectedCategory === 'medicines'
                                         ? 'bg-emerald-600 text-white shadow-sm'
                                         : 'bg-slate-800 text-slate-400 hover:text-white'
                                 }`}
                             >
-                                OTC Meds
+                                💊 Medicines
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setSelectedCategory('rx')}
+                                onClick={() => setSelectedCategory('groceries')}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    selectedCategory === 'rx'
+                                    selectedCategory === 'groceries'
                                         ? 'bg-emerald-600 text-white shadow-sm'
                                         : 'bg-slate-800 text-slate-400 hover:text-white'
                                 }`}
                             >
-                                Rx Prescription
+                                🛒 Groceries
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedCategory('supplies')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    selectedCategory === 'supplies'
+                                        ? 'bg-emerald-600 text-white shadow-sm'
+                                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                🩹 Supplies
                             </button>
                         </div>
                     </div>
