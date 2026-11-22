@@ -98,7 +98,8 @@ export default function PosTerminal({
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
     const [checkoutForm] = Form.useForm();
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash' | 'maya' | 'card'>('cash');
-    const [tenderedCash, setTenderedCash] = useState<number>(0);
+    const [tenderedCash, setTenderedCash] = useState<number | null>(null);
+    const [tenderMode, setTenderMode] = useState<'set' | 'add'>('set');
     const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
 
     // Completed Transaction & Receipt Modal
@@ -362,9 +363,10 @@ export default function PosTerminal({
             return;
         }
 
-        setTenderedCash(calculation.netTotal);
+        setTenderedCash(null);
+        setTenderMode('set');
         checkoutForm.setFieldsValue({
-            paid_amount: calculation.netTotal,
+            paid_amount: undefined,
             payment_method: 'cash',
         });
         setIsCheckoutModalOpen(true);
@@ -394,6 +396,15 @@ export default function PosTerminal({
 
     // Submit Checkout
     const handleCheckoutSubmit = async (values: any) => {
+        const cashPaid = paymentMethod === 'cash' ? Number(values.paid_amount ?? tenderedCash) : calculation.netTotal;
+
+        if (paymentMethod === 'cash' && cashPaid < calculation.netTotal) {
+            message.warning(
+                `Insufficient cash! Customer provided ₱${cashPaid.toFixed(2)}, but total amount due is ₱${calculation.netTotal.toFixed(2)}.`
+            );
+            return;
+        }
+
         setIsSubmittingCheckout(true);
 
         const payload = {
@@ -410,7 +421,7 @@ export default function PosTerminal({
             customer_booklet_number: customerDetails.bookletNumber || null,
             payment_method: paymentMethod,
             payment_reference: values.payment_reference || null,
-            paid_amount: paymentMethod === 'cash' ? Number(values.paid_amount || tenderedCash) : calculation.netTotal,
+            paid_amount: cashPaid,
             notes: values.notes || null,
         };
 
@@ -895,13 +906,13 @@ export default function PosTerminal({
                 open={isCheckoutModalOpen}
                 onCancel={() => setIsCheckoutModalOpen(false)}
                 footer={null}
-                width={560}
+                width={620}
                 destroyOnClose
             >
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 mb-4 flex items-center justify-between">
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 mb-4 flex items-center justify-between">
                     <div>
                         <p className="text-xs text-slate-500 m-0">Total Net Amount Payable:</p>
-                        <p className="text-2xl font-bold font-mono text-emerald-600 m-0">
+                        <p className="text-3xl font-extrabold font-mono text-emerald-600 m-0">
                             ₱{calculation.netTotal.toFixed(2)}
                         </p>
                     </div>
@@ -945,51 +956,175 @@ export default function PosTerminal({
 
                     {/* Cash Tender & Quick Buttons */}
                     {paymentMethod === 'cash' ? (
-                        <div className="space-y-3 mb-4 bg-slate-50/80 p-3 rounded-2xl border border-slate-200">
+                        <div className="space-y-3 mb-4 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200">
+                            {/* Full Width Cash Tendered Input */}
                             <Form.Item
                                 name="paid_amount"
-                                label={<span className="font-semibold text-slate-700">Cash Received / Tendered (₱ PHP)</span>}
+                                label={
+                                    <div className="flex items-center justify-between w-full">
+                                        <span className="font-bold text-slate-800 text-sm">
+                                            Cash Received / Tendered (₱ PHP)
+                                        </span>
+                                        {tenderedCash !== null && tenderedCash > 0 && tenderedCash < calculation.netTotal && (
+                                            <span className="text-xs font-bold text-red-500">
+                                                Short by ₱{(calculation.netTotal - tenderedCash).toFixed(2)}
+                                            </span>
+                                        )}
+                                    </div>
+                                }
                                 rules={[{ required: true, message: 'Please enter cash tendered' }]}
-                                className="!mb-2"
+                                className="!mb-3 w-full"
                             >
                                 <InputNumber
                                     min={0}
-                                    step={10}
+                                    step={1}
                                     precision={2}
-                                    prefix="₱"
+                                    prefix={<span className="text-emerald-600 font-extrabold text-2xl mr-2 select-none">₱</span>}
                                     size="large"
-                                    value={tenderedCash}
-                                    onChange={(val) => setTenderedCash(Number(val) || 0)}
-                                    className="w-full text-xl font-bold font-mono"
+                                    style={{ width: '100%' }}
+                                    value={tenderedCash ?? undefined}
+                                    placeholder="0.00"
+                                    onFocus={(e) => e.target.select()}
+                                    onClick={(e: any) => e.target.select()}
+                                    onChange={(val) => {
+                                        const num = val !== null && val !== undefined ? Number(val) : null;
+                                        setTenderedCash(num);
+                                        checkoutForm.setFieldsValue({ paid_amount: num ?? undefined });
+                                    }}
+                                    className="w-full text-2xl sm:text-3xl font-extrabold font-mono h-14 sm:h-16 flex items-center rounded-2xl shadow-inner border-slate-300"
                                     autoFocus
                                 />
                             </Form.Item>
 
-                            {/* Quick Tender Bills */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs text-slate-500">Quick Tender:</span>
-                                {quickTenderOptions.map((opt) => (
+                            {/* Denomination Controls Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Philippine Bills & Coins:</span>
+                                    <div className="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 text-[11px] font-bold">
+                                        <button
+                                            type="button"
+                                            onClick={() => setTenderMode('set')}
+                                            className={`px-2 py-0.5 rounded-md transition-all ${
+                                                tenderMode === 'set'
+                                                    ? 'bg-white text-slate-900 shadow-xs'
+                                                    : 'text-slate-500 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            Set Bill
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTenderMode('add')}
+                                            className={`px-2 py-0.5 rounded-md transition-all ${
+                                                tenderMode === 'add'
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : 'text-slate-500 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            + Add Up
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
                                     <button
-                                        key={opt}
                                         type="button"
                                         onClick={() => {
-                                            setTenderedCash(opt);
-                                            checkoutForm.setFieldsValue({ paid_amount: opt });
+                                            setTenderedCash(calculation.netTotal);
+                                            checkoutForm.setFieldsValue({ paid_amount: calculation.netTotal });
                                         }}
-                                        className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-white border border-slate-300 hover:bg-emerald-50 hover:border-emerald-400 text-slate-700 transition-colors"
+                                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-xs flex items-center gap-1 active:scale-95"
                                     >
-                                        ₱{opt.toFixed(2)}
+                                        <span>⚡ Exact</span>
+                                        <span className="font-mono">₱{calculation.netTotal.toFixed(2)}</span>
                                     </button>
-                                ))}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTenderedCash(null);
+                                            checkoutForm.setFieldsValue({ paid_amount: undefined });
+                                        }}
+                                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors active:scale-95"
+                                    >
+                                        Reset (₱0)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Denomination Buttons Grid */}
+                            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                                {[
+                                    { value: 10, label: '₱10', note: 'Coin', activeClass: 'bg-slate-800 text-white border-slate-900 ring-2 ring-slate-400 shadow-sm font-black', inactiveClass: 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 font-bold' },
+                                    { value: 20, label: '₱20', note: 'Orange', activeClass: 'bg-orange-500 text-white border-orange-600 ring-2 ring-orange-300 shadow-sm font-black', inactiveClass: 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-orange-300 font-bold' },
+                                    { value: 50, label: '₱50', note: 'Red', activeClass: 'bg-rose-500 text-white border-rose-600 ring-2 ring-rose-300 shadow-sm font-black', inactiveClass: 'bg-rose-50 hover:bg-rose-100 text-rose-900 border-rose-300 font-bold' },
+                                    { value: 100, label: '₱100', note: 'Violet', activeClass: 'bg-purple-600 text-white border-purple-700 ring-2 ring-purple-300 shadow-sm font-black', inactiveClass: 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-300 font-bold' },
+                                    { value: 200, label: '₱200', note: 'Green', activeClass: 'bg-emerald-600 text-white border-emerald-700 ring-2 ring-emerald-300 shadow-sm font-black', inactiveClass: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300 font-bold' },
+                                    { value: 500, label: '₱500', note: 'Yellow', activeClass: 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-300 shadow-sm font-black', inactiveClass: 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300 font-bold' },
+                                    { value: 1000, label: '₱1,000', note: 'Blue', activeClass: 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-300 shadow-sm font-black', inactiveClass: 'bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300 font-bold' },
+                                ].map((denom) => {
+                                    const isHighlighted = tenderedCash !== null && tenderedCash === denom.value;
+                                    return (
+                                        <button
+                                            key={denom.value}
+                                            type="button"
+                                            onClick={() => {
+                                                const nextVal = tenderMode === 'add' ? ((tenderedCash ?? 0) + denom.value) : denom.value;
+                                                setTenderedCash(nextVal);
+                                                checkoutForm.setFieldsValue({ paid_amount: nextVal });
+                                            }}
+                                            className={`h-12 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                                                isHighlighted ? denom.activeClass : denom.inactiveClass
+                                            }`}
+                                        >
+                                            <span className="text-sm font-mono leading-tight">{denom.label}</span>
+                                            <span className="text-[10px] opacity-75 uppercase leading-tight font-sans">{denom.note}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {/* Change Due Display */}
-                            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                                <span className="text-xs font-bold text-slate-600">Change Due to Customer:</span>
-                                <span className="text-lg font-mono font-bold text-emerald-600">
-                                    ₱{Math.max(0, tenderedCash - calculation.netTotal).toFixed(2)}
-                                </span>
-                            </div>
+                            {(() => {
+                                const currentCash = tenderedCash ?? 0;
+                                const isSufficient = tenderedCash !== null && currentCash >= calculation.netTotal;
+                                const isExact = tenderedCash !== null && currentCash === calculation.netTotal;
+
+                                return (
+                                    <div className="p-3.5 rounded-2xl border transition-all flex items-center justify-between mt-3 bg-white border-slate-200 shadow-xs">
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-500 m-0">
+                                                {isSufficient
+                                                    ? 'Change Due to Customer:'
+                                                    : tenderedCash !== null && currentCash > 0
+                                                    ? 'Remaining Amount Due:'
+                                                    : 'Total Amount to Pay:'}
+                                            </p>
+                                            <p
+                                                className={`text-2xl sm:text-3xl font-mono font-extrabold m-0 ${
+                                                    isSufficient
+                                                        ? 'text-emerald-600'
+                                                        : tenderedCash !== null && currentCash > 0
+                                                        ? 'text-amber-600'
+                                                        : 'text-slate-800'
+                                                }`}
+                                            >
+                                                ₱{tenderedCash !== null ? Math.abs(currentCash - calculation.netTotal).toFixed(2) : calculation.netTotal.toFixed(2)}
+                                            </p>
+                                        </div>
+
+                                        {isSufficient ? (
+                                            <Tag color="success" className="font-bold text-xs px-2.5 py-1 m-0">
+                                                {isExact ? 'Exact Payment' : '✓ Change Ready'}
+                                            </Tag>
+                                        ) : (
+                                            <Tag color="warning" className="font-bold text-xs px-2.5 py-1 m-0">
+                                                {tenderedCash === null || currentCash === 0 ? 'Enter Cash Tendered' : 'Insufficient Amount'}
+                                            </Tag>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     ) : (
                         <Form.Item
@@ -1006,8 +1141,13 @@ export default function PosTerminal({
                         <Button
                             type="primary"
                             htmlType="submit"
+                            disabled={paymentMethod === 'cash' && (tenderedCash === null || tenderedCash < calculation.netTotal)}
                             loading={isSubmittingCheckout}
-                            className="bg-emerald-600 hover:bg-emerald-500 font-bold px-6"
+                            className={`font-bold px-6 h-11 text-sm sm:text-base rounded-xl transition-all ${
+                                paymentMethod === 'cash' && (tenderedCash === null || tenderedCash < calculation.netTotal)
+                                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed border-none'
+                                    : 'bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-950/20'
+                            }`}
                         >
                             Complete & Print Receipt (F9)
                         </Button>
