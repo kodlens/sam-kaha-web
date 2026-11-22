@@ -15,6 +15,11 @@ class PosController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
+        $activeShift = $user->activeShift();
+
+        if ($activeShift) {
+            $activeShift->load(['cashDrops']);
+        }
 
         return Inertia::render('cashier/pos', [
             'cashier' => [
@@ -23,7 +28,7 @@ class PosController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
             ],
-            'shift' => null, // Will connect to Shift module in Phase 4/6
+            'shift' => $activeShift,
         ]);
     }
 }

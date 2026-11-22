@@ -107,12 +107,12 @@ export default function AdminLayout({
         {
             key: '/admin/discounts',
             icon: <PercentageOutlined className="text-purple-400" />,
-            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Senior / PWD Discounts</span>,
+            label: <Link href="/admin/discounts" onClick={() => setMobileOpen(false)}>Senior / PWD Discounts</Link>,
         },
         {
             key: '/admin/shifts',
             icon: <ClockCircleOutlined className="text-cyan-400" />,
-            label: <span className="text-zinc-400 cursor-not-allowed" onClick={() => setMobileOpen(false)}>Cashier Shifts (X/Z)</span>,
+            label: <Link href="/admin/shifts" onClick={() => setMobileOpen(false)}>Cashier Shifts (X/Z)</Link>,
         },
         {
             key: '/admin/staff',

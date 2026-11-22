@@ -94,4 +94,20 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return $this->status === 'active';
     }
+
+    /**
+     * Shifts handled by this user.
+     */
+    public function shifts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CashierShift::class, 'cashier_id');
+    }
+
+    /**
+     * Currently active open shift for this cashier.
+     */
+    public function activeShift(): ?CashierShift
+    {
+        return $this->shifts()->where('status', 'open')->latest('opened_at')->first();
+    }
 }

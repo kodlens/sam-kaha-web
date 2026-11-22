@@ -72,17 +72,77 @@ export type ProductBatch = {
     updated_at?: string;
 };
 
+export type ShiftCashDrop = {
+    id: number;
+    cashier_shift_id: number;
+    cashier_id: number;
+    type: 'drop_to_vault' | 'petty_cash_expense' | 'float_replenishment';
+    amount: number | string;
+    reason: string;
+    authorized_by?: number | null;
+    authorizer?: { id: number; name: string } | null;
+    created_at: string;
+};
+
 export type CashierShift = {
     id: number;
     cashier_id: number;
-    cashier_name: string;
-    opening_float: number;
-    closing_cash?: number | null;
-    expected_cash?: number | null;
-    cash_difference?: number | null;
+    device_terminal_id?: string;
+    opening_float: number | string;
+    cash_sales_total?: number | string;
+    non_cash_sales_total?: number | string;
+    cash_drops_total?: number | string;
+    closing_cash?: number | string | null;
+    expected_cash?: number | string | null;
+    cash_difference?: number | string | null;
+    current_drawer_cash?: number;
+    is_over_short?: 'in_progress' | 'balanced' | 'overage' | 'shortage';
+    denomination_breakdown?: Record<string, number> | null;
     status: 'open' | 'closed';
     opened_at: string;
     closed_at?: string | null;
+    notes?: string | null;
+    cashier?: {
+        id: number;
+        name: string;
+        email: string;
+        role?: string;
+    };
+    cash_drops?: ShiftCashDrop[];
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type DiscountType = {
+    id: number;
+    name: string;
+    code: string;
+    percentage: number | string;
+    is_vat_exempt: boolean;
+    requires_id: boolean;
+    requires_booklet: boolean;
+    applies_to: 'medicines_and_supplies' | 'all' | 'groceries_only';
+    is_statutory: boolean;
+    legal_basis?: string | null;
+    description?: string | null;
+    is_active: boolean;
+};
+
+export type StatutoryDiscountLog = {
+    id: number;
+    discount_type_id: number;
+    customer_name: string;
+    id_number: string;
+    booklet_number?: string | null;
+    gross_amount: number | string;
+    vat_exempt_amount: number | string;
+    vat_relief_amount: number | string;
+    discount_amount: number | string;
+    net_amount: number | string;
+    cashier_name?: string | null;
+    cashier_id?: number | null;
+    recorded_at: string;
+    discount_type?: DiscountType;
 };
 
 export type PhilippineDiscountType = 'none' | 'senior_citizen' | 'pwd' | 'regular_promo';

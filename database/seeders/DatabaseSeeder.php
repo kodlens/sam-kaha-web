@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             UnitOfMeasureSeeder::class,
             ProductSeeder::class,
             ProductBatchSeeder::class,
+            DiscountTypeSeeder::class,
+            CashierShiftSeeder::class,
         ]);
     }
 }

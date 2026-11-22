@@ -2,9 +2,12 @@
 
 use App\Http\Controllers\Admin\BatchController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ShiftAuditController;
 use App\Http\Controllers\Admin\UnitOfMeasureController;
 use App\Http\Controllers\Cashier\PosController;
+use App\Http\Controllers\Cashier\ShiftController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -46,11 +49,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/batches/{batch}', [BatchController::class, 'update'])->name('batches.update');
         Route::patch('/batches/{batch}/quarantine', [BatchController::class, 'quarantine'])->name('batches.quarantine');
         Route::post('/batches/{batch}/adjust', [BatchController::class, 'adjustStock'])->name('batches.adjust');
+
+        // Module 5: Discounts & Philippine Statutory Benefits
+        Route::get('/discounts', [DiscountController::class, 'index'])->name('discounts.index');
+        Route::post('/discounts', [DiscountController::class, 'store'])->name('discounts.store');
+        Route::put('/discounts/{discount}', [DiscountController::class, 'update'])->name('discounts.update');
+        Route::patch('/discounts/{discount}/toggle', [DiscountController::class, 'toggleStatus'])->name('discounts.toggle');
+
+        // Module 6: Cashier Shifts & Cash Drawer Audit
+        Route::get('/shifts', [ShiftAuditController::class, 'index'])->name('shifts.index');
+        Route::post('/shifts/{shift}/force-close', [ShiftAuditController::class, 'forceClose'])->name('shifts.force-close');
     });
 
     // Cashier module routes
     Route::prefix('cashier')->name('cashier.')->group(function () {
         Route::get('/pos', [PosController::class, 'index'])->name('pos');
+
+        // Shift management
+        Route::post('/shifts/open', [ShiftController::class, 'store'])->name('shifts.open');
+        Route::post('/shifts/{shift}/drop', [ShiftController::class, 'cashDrop'])->name('shifts.drop');
+        Route::post('/shifts/{shift}/close', [ShiftController::class, 'close'])->name('shifts.close');
+        Route::get('/shifts/{shift}/reading', [ShiftController::class, 'reading'])->name('shifts.reading');
     });
 });
 

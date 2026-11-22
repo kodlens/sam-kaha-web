@@ -26,6 +26,7 @@ import {
     PauseCircleOutlined,
     CheckCircleFilled,
 } from '@ant-design/icons';
+import type { CashierShift } from '@/types/pharmacy';
 
 const { Title, Text } = Typography;
 
@@ -36,7 +37,7 @@ interface PosProps {
         email: string;
         role: string;
     };
-    shift: any;
+    shift: CashierShift | null;
 }
 
 export default function PosTerminal({ cashier, shift }: PosProps) {
@@ -54,6 +55,16 @@ export default function PosTerminal({ cashier, shift }: PosProps) {
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 h-full min-h-[calc(100vh-5.5rem)]">
                 {/* LEFT AREA: SEARCH & MEDICINE DISPENSING SELECTION (7 COLS) */}
                 <div className="lg:col-span-7 flex flex-col gap-3 h-full">
+                    {/* SHIFT STANDBY BANNER IF CLOSED */}
+                    {(!shift || shift.status !== 'open') && (
+                        <div className="bg-amber-950/40 border border-amber-600/50 px-4 py-3 rounded-2xl flex items-center justify-between text-amber-300 text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping inline-block" />
+                                <span className="font-semibold">Cash Register Standby: No active shift open. Please click "Open Shift & Starting Float" in the header to open register drawer.</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* SEARCH & BARCODE BAR */}
                     <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row items-center gap-3">
                         <div className="relative flex-1 w-full">
