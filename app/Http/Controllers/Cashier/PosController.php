@@ -39,6 +39,19 @@ class PosController extends Controller
         $user = $request->user();
         $activeShift = $user->activeShift();
 
+        // If admin has no active shift, auto-open an admin session shift for instant POS access
+        if ($user->isAdmin() && ! $activeShift) {
+            $activeShift = CashierShift::create([
+                'cashier_id' => $user->id,
+                'device_terminal_id' => 'ADMIN-TERM',
+                'opening_float' => 2000.00,
+                'expected_cash' => 2000.00,
+                'status' => 'open',
+                'opened_at' => Carbon::now(),
+                'notes' => 'Administrator POS session active.',
+            ]);
+        }
+
         if ($activeShift) {
             $activeShift->load(['cashDrops']);
         }
@@ -89,7 +102,25 @@ class PosController extends Controller
         $user = $request->user();
         $shift = $user->activeShift();
 
+        if (! $shift && $user->isAdmin()) {
+            $shift = CashierShift::create([
+                'cashier_id' => $user->id,
+                'device_terminal_id' => 'ADMIN-TERM',
+                'opening_float' => 2000.00,
+                'expected_cash' => 2000.00,
+                'status' => 'open',
+                'opened_at' => Carbon::now(),
+                'notes' => 'Administrator POS session active.',
+            ]);
+        }
+
         if (! $shift) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Cannot process transaction without an active open shift. Please open a shift first.',
+                ], 422);
+            }
             return back()->with('error', 'Cannot process transaction without an active open shift. Please open a shift first.');
         }
 
@@ -122,8 +153,17 @@ class PosController extends Controller
         try {
             // Generate official sequential invoice number: INV-YYYYMMDD-XXXX
             $datePrefix = Carbon::now()->format('Ymd');
-            $dailyCount = Transaction::whereDate('created_at', Carbon::today())->lockForUpdate()->count() + 1;
-            $invoiceNumber = 'INV-' . $datePrefix . '-' . str_pad($dailyCount, 4, '0', STR_PAD_LEFT);
+            $latestToday = Transaction::where('invoice_number', 'like', "INV-{$datePrefix}-%")
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            $nextSeq = 1;
+            if ($latestToday && preg_match('/-(\d+)$/', $latestToday->invoice_number, $matches)) {
+                $nextSeq = (int) $matches[1] + 1;
+            }
+
+            $invoiceNumber = 'INV-' . $datePrefix . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
 
             // Fetch products and verify items
             $discountType = ! empty($validated['discount_type_id'])

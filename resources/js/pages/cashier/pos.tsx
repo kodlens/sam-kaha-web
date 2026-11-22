@@ -330,8 +330,6 @@ export default function PosTerminal({
 
     // Submit Checkout
     const handleCheckoutSubmit = async (values: any) => {
-        if (!shift) return;
-
         setIsSubmittingCheckout(true);
 
         const payload = {
@@ -349,21 +347,19 @@ export default function PosTerminal({
             payment_method: paymentMethod,
             payment_reference: values.payment_reference || null,
             paid_amount: paymentMethod === 'cash' ? Number(values.paid_amount || tenderedCash) : calculation.netTotal,
-            doctor_name: values.doctor_name || null,
-            doctor_license_no: values.doctor_license_no || null,
-            doctor_ptr_no: values.doctor_ptr_no || null,
-            patient_name: values.patient_name || null,
-            patient_age: values.patient_age ? Number(values.patient_age) : null,
             notes: values.notes || null,
         };
 
         try {
-            const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content;
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
+            const csrfToken = csrfMeta?.content;
+
             const response = await fetch('/cashier/pos/checkout', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': csrfToken || '',
                 },
                 body: JSON.stringify(payload),
@@ -372,7 +368,7 @@ export default function PosTerminal({
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Checkout failed');
+                throw new Error(data.error || data.message || 'Checkout failed');
             }
 
             // Success!
@@ -783,16 +779,41 @@ export default function PosTerminal({
                         </div>
 
                         {/* CHECKOUT BUTTON */}
-                        <Button
-                            type="primary"
-                            size="large"
-                            disabled={cart.length === 0 || !shift || shift.status !== 'open'}
-                            onClick={handleOpenCheckout}
-                            className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 font-bold text-base rounded-2xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
-                        >
-                            <span>Pay & Dispense (F9)</span>
-                            <span className="font-mono">₱{calculation.netTotal.toFixed(2)}</span>
-                        </Button>
+                        {(!shift || shift.status !== 'open') ? (
+                            <Button
+                                type="primary"
+                                size="large"
+                                onClick={() => {
+                                    router.post('/cashier/shifts/open', {
+                                        opening_float: 2000,
+                                        device_terminal_id: 'TERM-01',
+                                        notes: 'Active register shift opened',
+                                    }, {
+                                        onSuccess: () => {
+                                            message.success('Shift opened with ₱2,000 float! You can now checkout.');
+                                        },
+                                        onError: (err) => {
+                                            message.error(Object.values(err)[0] as string || 'Failed to open shift');
+                                        }
+                                    });
+                                }}
+                                className="w-full h-12 bg-amber-600 hover:bg-amber-500 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg"
+                            >
+                                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                                <span>Click to Open Shift & Enable Checkout</span>
+                            </Button>
+                        ) : (
+                            <Button
+                                type="primary"
+                                size="large"
+                                disabled={cart.length === 0}
+                                onClick={handleOpenCheckout}
+                                className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 font-bold text-base rounded-2xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2"
+                            >
+                                <span>Pay & Dispense (F9)</span>
+                                <span className="font-mono">₱{calculation.netTotal.toFixed(2)}</span>
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -913,56 +934,6 @@ export default function PosTerminal({
                         >
                             <Input placeholder="e.g. GCash Ref # 123456789" />
                         </Form.Item>
-                    )}
-
-                    {/* Prescription Details Section (Required if Rx items present) */}
-                    {hasPrescriptionItems && (
-                        <div className="p-3 bg-red-50/70 border border-red-200 rounded-2xl mb-4 space-y-2">
-                            <div className="flex items-center gap-1.5 text-xs text-red-700 font-bold">
-                                <SafetyCertificateOutlined />
-                                <span>Doctor Prescription (Rx) Compliance Required</span>
-                            </div>
-                            <p className="text-[11px] text-red-600 m-0">
-                                This order contains prescription-only medicine. Please record physician details as mandated by the Philippine FDA and Generics Act.
-                            </p>
-
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                <Form.Item
-                                    name="doctor_name"
-                                    label="Physician Name"
-                                    rules={[{ required: true, message: 'Doctor name is required' }]}
-                                    className="!mb-2"
-                                >
-                                    <Input placeholder="Dr. Maria Santos" />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="doctor_license_no"
-                                    label="PRC License No."
-                                    rules={[{ required: true, message: 'PRC License is required' }]}
-                                    className="!mb-2"
-                                >
-                                    <Input placeholder="PRC-012345" />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="patient_name"
-                                    label="Patient Full Name"
-                                    rules={[{ required: true, message: 'Patient name is required' }]}
-                                    className="!mb-0"
-                                >
-                                    <Input placeholder="Juan Dela Cruz" />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="doctor_ptr_no"
-                                    label="PTR No. (Optional)"
-                                    className="!mb-0"
-                                >
-                                    <Input placeholder="PTR-8765432" />
-                                </Form.Item>
-                            </div>
-                        </div>
                     )}
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
