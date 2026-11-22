@@ -44,6 +44,7 @@ export type Product = {
     description?: string | null;
     is_active: boolean;
     full_name?: string;
+    total_stock_base?: number;
     units?: ProductUnit[];
     base_unit?: ProductUnit;
     created_at?: string;
@@ -154,4 +155,100 @@ export type PrescriptionInfo = {
     patient_name: string;
     patient_age?: number;
     patient_address?: string;
+};
+
+export type CartItem = {
+    cart_id: string; // unique frontend client id
+    product_id: number;
+    product: Product;
+    unit_of_measure_id: number;
+    unit_of_measure: UnitOfMeasure;
+    conversion_factor: number;
+    quantity: number;
+    unit_price: number;
+    subtotal: number;
+    requires_prescription: boolean;
+    is_vatable: boolean;
+    sc_pwd_discountable: boolean;
+};
+
+export type TransactionItem = {
+    id: number;
+    transaction_id: number;
+    product_id: number;
+    product_batch_id?: number | null;
+    unit_of_measure_id: number;
+    conversion_factor: number;
+    quantity: number;
+    quantity_in_base_units: number;
+    unit_price: number | string;
+    subtotal: number | string;
+    discount_amount: number | string;
+    total_amount: number | string;
+    is_vatable: boolean;
+    sc_pwd_discountable: boolean;
+    product?: Product;
+    unit_of_measure?: UnitOfMeasure;
+    batch?: ProductBatch;
+};
+
+export type Transaction = {
+    id: number;
+    invoice_number: string;
+    cashier_shift_id: number;
+    cashier_id: number;
+    subtotal: number | string;
+    vatable_sales: number | string;
+    vat_exempt_sales: number | string;
+    vat_amount: number | string;
+    vat_relief_amount: number | string;
+    discount_amount: number | string;
+    discount_type_id?: number | null;
+    customer_name?: string | null;
+    customer_id_number?: string | null;
+    customer_booklet_number?: string | null;
+    total_amount: number | string;
+    paid_amount: number | string;
+    change_amount: number | string;
+    payment_method: 'cash' | 'gcash' | 'maya' | 'card';
+    payment_reference?: string | null;
+    status: 'completed' | 'cancelled' | 'refunded';
+    notes?: string | null;
+    items?: TransactionItem[];
+    prescription?: PrescriptionInfo | null;
+    cashier?: {
+        id: number;
+        name: string;
+        email: string;
+    };
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type HeldCart = {
+    id: number;
+    cashier_id: number;
+    cart_reference: string;
+    cart_data: CartItem[];
+    created_at: string;
+};
+
+export type StockMovement = {
+    id: number;
+    product_id: number;
+    product_batch_id?: number | null;
+    unit_of_measure_id?: number | null;
+    movement_type: 'sale' | 'purchase_receiving' | 'adjustment_in' | 'adjustment_out' | 'return' | 'waste_expired';
+    quantity: number | string;
+    quantity_in_base_units: number | string;
+    balance_before: number | string;
+    balance_after: number | string;
+    reference_type?: string | null;
+    reference_id?: string | null;
+    user_id?: number | null;
+    notes?: string | null;
+    product?: Product;
+    batch?: ProductBatch;
+    unit_of_measure?: UnitOfMeasure;
+    created_at: string;
 };

@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             ProductBatchSeeder::class,
             DiscountTypeSeeder::class,
             CashierShiftSeeder::class,
+            TransactionSeeder::class,
         ]);
     }
 }

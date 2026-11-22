@@ -64,6 +64,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Cashier module routes
     Route::prefix('cashier')->name('cashier.')->group(function () {
         Route::get('/pos', [PosController::class, 'index'])->name('pos');
+        Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
+        Route::post('/pos/hold-cart', [PosController::class, 'holdCart'])->name('pos.hold-cart');
+        Route::delete('/pos/held-cart/{heldCart}', [PosController::class, 'deleteHeldCart'])->name('pos.delete-held-cart');
 
         // Shift management
         Route::post('/shifts/open', [ShiftController::class, 'store'])->name('shifts.open');
